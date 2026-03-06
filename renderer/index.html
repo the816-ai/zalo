@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zalo Tool Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <!-- ═══ CUSTOM TITLEBAR ═══════════════════════════════════════ -->
+    <div class="titlebar">
+        <div class="titlebar-drag"></div>
+        <div class="titlebar-title">
+            <span class="titlebar-logo">Z</span>
+            Zalo Tool Pro
+        </div>
+        <div class="titlebar-controls">
+            <button id="btn-min" title="Thu nhỏ">─</button>
+            <button id="btn-max" title="Phóng to">□</button>
+            <button id="btn-close" class="close" title="Ẩn vào khay">✕</button>
+        </div>
+    </div>
+
+    <!-- ═══ APP LAYOUT ═══════════════════════════════════════════ -->
+    <div class="app-layout">
+
+        <!-- ══ SIDEBAR ══════════════════════════════════════════════ -->
+        <aside class="sidebar">
+
+            <!-- Brand / Account -->
+            <div class="sidebar-brand">
+                <div class="brand-row">
+                    <div class="brand-icon">Z</div>
+                    <div>
+                        <div class="brand-name">Zalo Tool</div>
+                    </div>
+                </div>
+                <div class="brand-status" id="accountStatus">
+                    <span class="status-dot offline" id="statusDot"></span>
+                    <span id="statusText">Chưa kết nối</span>
+                </div>
+            </div>
+
+            <!-- Nav -->
+            <nav class="sidebar-nav">
+                <a class="nav-item" data-page="groups" onclick="navigate('groups')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <span>Danh sách nhóm</span>
+                </a>
+
+                <a class="nav-item" data-page="bulk-send" onclick="navigate('bulk-send')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                    <span>Gửi tin hàng loạt</span>
+                    <span class="nav-badge">HOT</span>
+                </a>
+
+                <a class="nav-item" data-page="messages" onclick="navigate('messages')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>Tin nhắn</span>
+                    <span class="nav-count" id="msgCount">0</span>
+                </a>
+
+                <a class="nav-item" data-page="auto-friend" onclick="navigate('auto-friend')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <line x1="19" y1="8" x2="19" y2="14" />
+                        <line x1="22" y1="11" x2="16" y2="11" />
+                    </svg>
+                    <span>Tự động kết bạn</span>
+                </a>
+
+                <a class="nav-item" data-page="contacts" onclick="navigate('contacts')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <span>Danh bạ</span>
+                </a>
+
+                <div class="nav-sep"></div>
+
+                <a class="nav-item" data-page="copy-group" onclick="navigate('copy-group')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <span>Sao chép nhóm</span>
+                    <span class="nav-badge" style="background:#10b981">NEW</span>
+                </a>
+
+                <div class="nav-sep"></div>
+
+                <a class="nav-item" data-page="settings" onclick="navigate('settings')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span>Cài đặt</span>
+                </a>
+            </nav>
+
+            <!-- Footer -->
+            <div class="sidebar-footer">
+                <button class="btn-logout" id="btnLogout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    Đăng xuất
+                </button>
+                <div class="sidebar-ver">v2.1.0 • Chạy ngầm 24/7</div>
+            </div>
+        </aside>
+
+        <!-- ══ MAIN AREA ════════════════════════════════════════════ -->
+        <main class="main-area">
+
+            <!-- ══════ PAGE: DANH SÁCH NHÓM ════════════════════════ -->
+            <section class="page" id="page-groups">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Danh sách nhóm</h1>
+                        <p class="page-sub" id="groupSubtitle">Đang tải...</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn-icon" id="btnRefreshGroups" title="Tải lại">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10" />
+                                <polyline points="1 20 1 14 7 14" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                            </svg>
+                        </button>
+                        <button class="btn-primary" id="btnLoginGroup">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                                <polyline points="10 17 15 12 10 7" />
+                                <line x1="15" y1="12" x2="3" y2="12" />
+                            </svg>
+                            Đăng nhập Zalo
+                        </button>
+                    </div>
+                </div>
+
+                <div class="search-row">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        <input type="text" id="groupSearch" placeholder="Tìm kiếm nhóm..." />
+                    </div>
+                    <div class="filter-chips">
+                        <span class="filter-chip active" data-filter="all">Tất cả</span>
+                        <span class="filter-chip" data-filter="large">Nhiều thành viên</span>
+                        <span class="filter-chip" data-filter="recent">Gần đây</span>
+                    </div>
+                </div>
+
+                <div class="groups-grid" id="groupsGrid"></div>
+            </section>
+
+            <!-- ══════ PAGE: GỬI TIN HÀNG LOẠT ══════════════════════ -->
+            <section class="page" id="page-bulk-send">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Gửi Tin Hàng Loạt</h1>
+                        <p class="page-sub">Gửi tin nhắn đến nhiều người cùng lúc</p>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Danh sách người nhận -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">📋 Danh Sách Người Nhận</span>
+                            <div class="card-actions">
+                                <button class="btn-sm" id="btnImport">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    Import .txt
+                                </button>
+                                <button class="btn-sm" id="btnAddGroup">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <line x1="19" y1="8" x2="19" y2="14" />
+                                        <line x1="22" y1="11" x2="16" y2="11" />
+                                    </svg>
+                                    Từ nhóm
+                                </button>
+                            </div>
+                        </div>
+                        <div class="send-mode-tabs">
+                            <button class="mode-tab active" data-mode="phone">📱 Số điện thoại</button>
+                            <button class="mode-tab" data-mode="group">👥 Nhóm Zalo</button>
+                        </div>
+
+                        <!-- Panel: Số điện thoại -->
+                        <div id="panelPhone">
+                            <textarea id="phoneInput" class="big-textarea"
+                                placeholder="Nhập số điện thoại, mỗi dòng 1 số:&#10;0901234567&#10;0912345678&#10;..."></textarea>
+                            <div class="input-footer">
+                                <span id="phoneInputCount" class="count-badge">0 số</span>
+                                <button class="link-btn" id="btnClearInput">Xóa hết</button>
+                            </div>
+                        </div>
+
+                        <!-- Panel: Nhóm Zalo -->
+                        <div id="panelGroup" style="display:none">
+                            <div style="margin-bottom:8px;font-size:13px;color:var(--text-muted)">
+                                Chọn nhóm → nhấn <b>Bắt đầu gửi</b> để gửi đến tất cả thành viên
+                            </div>
+                            <div id="groupPickList"
+                                style="max-height:240px;overflow-y:auto;border:1px solid var(--card-border);border-radius:8px;padding:6px">
+                                <div style="text-align:center;padding:20px;color:var(--text-muted)" id="groupPickEmpty">
+                                    Chưa có nhóm — vui lòng đăng nhập QR trước
+                                </div>
+                            </div>
+                            <div class="input-footer" style="margin-top:6px">
+                                <span id="groupPickCount" class="count-badge">Chưa chọn nhóm</span>
+                                <button class="link-btn" id="btnRefreshGroupPick">🔄 Tải lại</button>
+                            </div>
+                        </div>
+
+                        <input type="file" id="importFileInput" accept=".txt,.csv" style="display:none" />
+                    </div>
+
+                    <!-- Nội dung tin nhắn -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">✉️ Nội Dung Tin Nhắn</span>
+                            <button class="btn-sm" id="btnPickTemplate">📝 Dùng mẫu</button>
+                        </div>
+                        <div class="var-pills">
+                            <span class="var-label">Biến động:</span>
+                            <span class="var-pill" onclick="insertVar('{name}')">👤 {name}</span>
+                            <span class="var-pill" onclick="insertVar('{phone}')">📞 {phone}</span>
+                            <span class="var-pill" onclick="insertVar('{date}')">📅 {date}</span>
+                        </div>
+                        <textarea id="msgInput" class="big-textarea"
+                            placeholder="Nội dung tin nhắn...&#10;&#10;Ví dụ: Xin chào {name}! Đây là thông báo quan trọng từ chúng tôi..."></textarea>
+                        <div class="input-footer">
+                            <span id="msgCharCount" class="count-badge">0/500</span>
+                        </div>
+
+                        <div class="setting-block">
+                            <div class="setting-row">
+                                <label>Độ trễ giữa các tin (giây)</label>
+                                <div class="slider-row">
+                                    <input type="range" id="sendDelay" min="1" max="30" value="3" />
+                                    <span id="sendDelayVal" class="slider-val">3s</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label>Độ trễ ngẫu nhiên</label>
+                                <label class="switch"><input type="checkbox" id="randomDelay" checked /><span
+                                        class="slider"></span></label>
+                            </div>
+                            <div class="setting-row">
+                                <label>Dừng khi có lỗi</label>
+                                <label class="switch"><input type="checkbox" id="stopOnFail" /><span
+                                        class="slider"></span></label>
+                            </div>
+                        </div>
+
+                        <!-- Anti-Ban Protection Panel -->
+                        <div id="antiBanPanel"
+                            style="background:linear-gradient(135deg,rgba(102,126,234,0.1),rgba(118,75,162,0.08));border:1px solid rgba(102,126,234,0.3);border-radius:12px;padding:14px;margin-bottom:12px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                                <span style="font-size:16px;">🛡️</span>
+                                <b style="font-size:13px;color:var(--text-h);flex:1">Bảo Vệ Tài Khoản</b>
+                                <span id="antiBanStatus"
+                                    style="font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(72,199,142,0.15);color:#48c78e;font-weight:700;">🟢
+                                    An toàn</span>
+                            </div>
+                            <div style="margin-bottom:8px;">
+                                <div
+                                    style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+                                    <span>Tin giờ này</span>
+                                    <span id="quotaHourText" style="font-weight:600;">0 / 30</span>
+                                </div>
+                                <div
+                                    style="background:rgba(255,255,255,0.06);border-radius:6px;height:6px;overflow:hidden;">
+                                    <div id="quotaHourBar"
+                                        style="height:100%;width:0%;background:linear-gradient(90deg,#48c78e,#06d6a0);border-radius:6px;transition:width 0.5s ease;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <div
+                                    style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+                                    <span>Tin hôm nay</span>
+                                    <span id="quotaDayText" style="font-weight:600;">0 / 200</span>
+                                </div>
+                                <div
+                                    style="background:rgba(255,255,255,0.06);border-radius:6px;height:6px;overflow:hidden;">
+                                    <div id="quotaDayBar"
+                                        style="height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:6px;transition:width 0.5s ease;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                                <div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">⏱ Max/giờ
+                                    </div>
+                                    <input type="number" id="maxPerHour" min="1" max="999" value="30"
+                                        onchange="updateQuotaUI()"
+                                        style="width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--card-border);background:white;color:var(--text-h);font-size:14px;font-weight:700;text-align:center;" />
+                                </div>
+                                <div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">📅 Max/ngày
+                                    </div>
+                                    <input type="number" id="maxPerDay" min="1" max="9999" value="200"
+                                        onchange="updateQuotaUI()"
+                                        style="width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--card-border);background:white;color:var(--text-h);font-size:14px;font-weight:700;text-align:center;" />
+                                </div>
+                            </div>
+                            <div
+                                style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span style="font-size:12px;color:var(--text-muted);">✨ Biến thể tin nhắn (bypass
+                                        spam)</span>
+                                    <label class="switch" style="transform:scale(0.8);">
+                                        <input type="checkbox" id="msgVariation" checked />
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span style="font-size:12px;color:var(--text-muted);">☕ Cool-down mỗi 10 tin
+                                        (30s)</span>
+                                    <label class="switch" style="transform:scale(0.8);">
+                                        <input type="checkbox" id="enableCooldown" checked />
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="btn-row">
+                            <button class="btn-primary" id="btnSend">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13" />
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                                </svg>
+                                Bắt đầu gửi
+                            </button>
+                            <button class="btn-outline" id="btnPauseSend" disabled>⏸ Tạm dừng</button>
+                            <button class="btn-danger-sm" id="btnStopSend" disabled>■ Dừng</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress bar -->
+                <div class="card" id="sendProgressCard" style="display:none">
+                    <div class="progress-row">
+                        <span class="progress-label" id="sendProgressLabel">Đang gửi...</span>
+                        <span class="progress-pct" id="sendProgressPct">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="sendProgressFill"></div>
+                    </div>
+                    <div class="progress-sub">
+                        <span id="sendProgressCur">0</span> / <span id="sendProgressTot">0</span> tin nhắn
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="card log-card">
+                    <div class="log-top">
+                        <span class="card-title">📊 Nhật ký hoạt động</span>
+                        <div class="log-stats">
+                            <span class="log-stat ok">✅ <span id="logOk">0</span></span>
+                            <span class="log-stat err">❌ <span id="logErr">0</span></span>
+                            <span class="log-stat wait">⏳ <span id="logWait">0</span></span>
+                        </div>
+                        <button class="link-btn" id="btnClearLog">Xóa log</button>
+                    </div>
+                    <div class="log-body" id="logBody"></div>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: TIN NHẮN ═════════════════════════════════ -->
+            <section class="page" id="page-messages">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Tin Nhắn</h1>
+                        <p class="page-sub">Hộp thư đến Zalo của bạn</p>
+                    </div>
+                </div>
+                <div class="empty-state">
+                    <div class="empty-icon">💬</div>
+                    <h3>Kết nối Zalo để xem tin nhắn</h3>
+                    <p>Đăng nhập bằng cookie Zalo ở trang Cài đặt để truy cập hộp thư đến và quản lý hội thoại.</p>
+                    <button class="btn-primary" onclick="navigate('settings')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width:15px;height:15px">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33" />
+                        </svg>
+                        Đi đến Cài đặt
+                    </button>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: TỰ ĐỘNG KẾT BẠN ════════════════════════ -->
+            <section class="page" id="page-auto-friend">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Tự Động Kết Bạn</h1>
+                        <p class="page-sub">Gửi lời mời kết bạn hàng loạt</p>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Đã gửi lời mời</div>
+                        <div class="stat-num" id="frSent">0</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-label">Thành công</div>
+                        <div class="stat-num" id="frOk">0</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="stat-label">Đang chờ duyệt</div>
+                        <div class="stat-num" id="frPend">0</div>
+                    </div>
+                    <div class="stat-card red">
+                        <div class="stat-label">Thất bại</div>
+                        <div class="stat-num" id="frFail">0</div>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Phone list -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">👥 Danh sách kết bạn</span>
+                            <button class="btn-sm" id="btnImportFr">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Import
+                            </button>
+                        </div>
+                        <textarea id="frPhoneInput" class="big-textarea"
+                            placeholder="Số điện thoại cần kết bạn, mỗi dòng 1 số:&#10;0901234567&#10;0912345678&#10;..."></textarea>
+                        <div class="input-footer">
+                            <span id="frPhoneCount" class="count-badge">0 người</span>
+                            <button class="link-btn" id="btnClearFr">Xóa hết</button>
+                        </div>
+                        <input type="file" id="frFileInput" accept=".txt,.csv" style="display:none" />
+                    </div>
+
+                    <!-- Settings -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">💬 Lời nhắn & Cài đặt</span>
+                        </div>
+                        <textarea id="frMsgInput" class="medium-textarea"
+                            placeholder="Lời nhắn kèm theo (không bắt buộc)&#10;Ví dụ: Xin chào! Mình muốn kết bạn với bạn 😊"></textarea>
+
+                        <div class="setting-block">
+                            <div class="setting-row">
+                                <label>Độ trễ giữa mỗi lần (giây)</label>
+                                <div class="slider-row">
+                                    <input type="range" id="frDelay" min="2" max="60" value="5" />
+                                    <span id="frDelayVal" class="slider-val">5s</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label>Ngẫu nhiên hoá thời gian</label>
+                                <label class="switch"><input type="checkbox" id="frRandom" checked /><span
+                                        class="slider"></span></label>
+                            </div>
+                            <div class="setting-row">
+                                <label>Giới hạn lời mời mỗi ngày</label>
+                                <input type="number" class="num-input" id="frLimit" value="50" min="1" max="200" />
+                            </div>
+                        </div>
+
+                        <div class="btn-row">
+                            <button class="btn-primary" id="btnStartFr">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <line x1="19" y1="8" x2="19" y2="14" />
+                                    <line x1="22" y1="11" x2="16" y2="11" />
+                                </svg>
+                                Bắt đầu kết bạn
+                            </button>
+                            <button class="btn-outline" id="btnPauseFr" disabled>⏸ Tạm dừng</button>
+                            <button class="btn-danger-sm" id="btnStopFr" disabled>■ Dừng</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="card" id="frProgressCard" style="display:none">
+                    <div class="progress-row">
+                        <span class="progress-label" id="frProgressLabel">Đang gửi lời mời...</span>
+                        <span class="progress-pct" id="frProgressPct">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill purple" id="frProgressFill"></div>
+                    </div>
+                    <div class="progress-sub">
+                        <span id="frProgressCur">0</span> / <span id="frProgressTot">0</span> người
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="card log-card">
+                    <div class="log-top">
+                        <span class="card-title">📊 Nhật ký kết bạn</span>
+                        <button class="link-btn" id="btnClearFrLog">Xóa log</button>
+                    </div>
+                    <div class="log-body" id="frLogBody"></div>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: DANH BẠ ══════════════════════════════════ -->
+            <section class="page" id="page-contacts">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Danh Bạ</h1>
+                        <p class="page-sub">Quản lý danh sách liên hệ của bạn</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn-sm" id="btnAddContact">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Thêm liên hệ
+                        </button>
+                        <button class="btn-sm" id="btnExportCt">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            Xuất CSV
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card" style="padding:0; overflow:hidden">
+                    <table class="data-table" id="contactTable">
+                        <thead>
+                            <tr>
+                                <th>Tên</th>
+                                <th>Số điện thoại</th>
+                                <th>Nhóm</th>
+                                <th>Trạng thái</th>
+                                <th style="width:100px">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contactBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: CÀI ĐẶT ═════════════════════════════════ -->
+            <section class="page" id="page-settings">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Cài Đặt</h1>
+                        <p class="page-sub">Cấu hình tài khoản và hệ thống</p>
+                    </div>
+                    <button class="btn-primary" id="btnSaveSettings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width:15px;height:15px">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                            <polyline points="17 21 17 13 7 13 7 21" />
+                            <polyline points="7 3 7 8 15 8" />
+                        </svg>
+                        Lưu cài đặt
+                    </button>
+                </div>
+
+                <!-- Đăng nhập -->
+                <div class="card">
+                    <div class="settings-section-title">🔑 Kết nối Zalo</div>
+                    <div
+                        style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;padding:20px;margin-bottom:14px;color:#fff;text-align:center">
+                        <div style="font-size:18px;font-weight:700;margin-bottom:6px">📱 Đăng nhập bằng QR Code</div>
+                        <p style="font-size:12px;opacity:.9;margin:0 0 14px 0">Mở Zalo điện thoại → nhấn QR → quét mã.
+                            Không cần cookie!</p>
+                        <button id="btnLoginQR"
+                            style="background:#fff;color:#667eea;font-weight:700;border:none;border-radius:8px;padding:11px 24px;font-size:14px;cursor:pointer;width:100%">
+                            🔲 Quét QR để đăng nhập
+                        </button>
+                    </div>
+                    <details>
+                        <summary style="cursor:pointer;color:#888;font-size:13px;padding:4px 0">⚙️ Dùng Cookie thủ công
+                            (nâng cao)</summary>
+                        <div style="margin-top:10px">
+                            <div class="form-row">
+                                <label>Cookie Zalo *</label>
+                                <textarea id="cookieInput" class="big-textarea" style="min-height:70px"
+                                    placeholder="Dán toàn bộ cookie Zalo vào đây..."></textarea>
+                            </div>
+                            <div class="form-row">
+                                <label>IMEI (tuỳ chọn)</label>
+                                <input type="text" id="imeiInput" class="text-field"
+                                    placeholder="IMEI từ Local Storage → Zalo" />
+                            </div>
+                            <button class="btn-primary" id="btnLoginSubmit">→ Xác thực & Kết nối</button>
+                        </div>
+                    </details>
+                    <p style="margin:8px 0 0;font-size:12px"><a href="#" id="howToCookie">Xem hướng dẫn lấy cookie</a>
+                    </p>
+                </div>
+
+                <!-- Giới hạn -->
+                <div class="card">
+                    <div class="settings-section-title">⚡ Giới hạn & An toàn</div>
+                    <div class="form-row inline">
+                        <label>Tối đa tin nhắn / ngày</label>
+                        <input type="number" class="num-input" id="setMaxMsg" value="200" />
+                    </div>
+                    <div class="form-row inline">
+                        <label>Tối đa kết bạn / ngày</label>
+                        <input type="number" class="num-input" id="setMaxFr" value="50" />
+                    </div>
+                    <div class="form-row inline">
+                        <label>Chế độ an toàn (giả lập hành vi người thật)</label>
+                        <label class="switch"><input type="checkbox" id="setSafeMode" checked /><span
+                                class="slider"></span></label>
+                    </div>
+                    <div class="form-row inline">
+                        <label>Khởi động cùng Windows</label>
+                        <label class="switch"><input type="checkbox" id="setAutoStart" /><span
+                                class="slider"></span></label>
+                    </div>
+                </div>
+
+                <!-- About -->
+                <div class="card about-card">
+                    <div class="about-logo">Z</div>
+                    <div class="about-info">
+                        <div class="about-name">Zalo Bulk Tool Pro</div>
+                        <div class="about-ver">Phiên bản 2.1.0 • Electron Desktop App</div>
+                        <div class="about-features">
+                            ✅ Chạy ngầm 24/7 &nbsp;|&nbsp; 🔔 System Tray &nbsp;|&nbsp;
+                            💾 Lưu cục bộ &nbsp;|&nbsp; 🔒 Dữ liệu không rời máy
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: SAO CHÉP THÀNH VIÊN NHÓM ══════════════════════ -->
+            <section class="page" id="page-copy-group">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">🔁 Sao Chép Thành Viên Nhóm</h1>
+                        <p class="page-sub">Lấy toàn bộ thành viên từ nhóm nguồn → thêm vào nhóm của bạn</p>
+                    </div>
+                </div>
+
+                <div class="two-col" style="gap:16px;align-items:flex-start;">
+
+                    <!-- Cột trái: Cài đặt -->
+                    <div class="card" style="flex:1;">
+                        <div class="card-title">⚙️ Cấu Hình</div>
+
+                        <!-- Nhóm nguồn -->
+                        <div style="margin-bottom:14px;">
+                            <label style="font-size:12px;color:var(--text-sub);display:block;margin-bottom:6px;">📁 Nhóm
+                                NGUỒN (nhóm bạn đã tham gia)</label>
+                            <select id="cpySrcGroup"
+                                style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid var(--card-border);background:white;color:var(--text-h);font-size:13px;">
+                                <option value="">-- Chọn nhóm nguồn --</option>
+                            </select>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;">
+                                <div id="cpySrcInfo" style="font-size:11px;color:var(--text-muted);"></div>
+                                <button id="btnRefreshCopyGroups"
+                                    style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--card-border);background:white;cursor:pointer;color:var(--text-muted);">
+                                    🔄 Tải lại
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Mode chọn -->
+                        <div style="margin-bottom:14px;">
+                            <label style="font-size:12px;color:var(--text-sub);display:block;margin-bottom:6px;">🎯
+                                Đích</label>
+                            <div style="display:flex;gap:8px;">
+                                <label
+                                    style="flex:1;display:flex;align-items:center;gap:6px;padding:8px 10px;border:1.5px solid var(--card-border);border-radius:8px;cursor:pointer;font-size:13px;"
+                                    id="modeTgtLabel">
+                                    <input type="radio" name="cpyMode" value="target" id="modeTgt" checked
+                                        onchange="onCpyModeChange()"> Thêm vào nhóm có sẵn
+                                </label>
+                                <label
+                                    style="flex:1;display:flex;align-items:center;gap:6px;padding:8px 10px;border:1.5px solid var(--card-border);border-radius:8px;cursor:pointer;font-size:13px;"
+                                    id="modeNewLabel">
+                                    <input type="radio" name="cpyMode" value="new" id="modeNew"
+                                        onchange="onCpyModeChange()"> ✨ Tạo nhóm mới
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Nhóm đích (có sẵn) -->
+                        <div id="panelTgtGroup" style="margin-bottom:14px;">
+                            <label style="font-size:12px;color:var(--text-sub);display:block;margin-bottom:6px;">📁 Nhóm
+                                ĐÍCH (thêm thành viên vào đây)</label>
+                            <select id="cpyTgtGroup"
+                                style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid var(--card-border);background:white;color:var(--text-h);font-size:13px;">
+                                <option value="">-- Chọn nhóm đích --</option>
+                            </select>
+                        </div>
+
+                        <!-- Tên nhóm mới -->
+                        <div id="panelNewGroup" style="display:none;margin-bottom:14px;">
+                            <label style="font-size:12px;color:var(--text-sub);display:block;margin-bottom:6px;">✏️ Tên
+                                nhóm mới</label>
+                            <input type="text" id="cpyNewName" placeholder="Nhóm sao chép 06/03/2026"
+                                style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid var(--card-border);background:white;color:var(--text-h);font-size:13px;" />
+                        </div>
+
+                        <!-- Cài đặt nâng cao -->
+                        <div class="setting-block" style="margin-bottom:16px;">
+                            <div class="setting-row">
+                                <label style="font-size:12px;">Batch size (người/lần)</label>
+                                <input type="number" id="cpyBatch" value="100" min="1" max="500"
+                                    style="width:65px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--card-border);background:white;color:var(--text-h);font-size:13px;text-align:center;" />
+                            </div>
+                            <div class="setting-row">
+                                <label style="font-size:12px;">Delay giữa batch (giây)</label>
+                                <input type="number" id="cpyDelay" value="2" min="1" max="60"
+                                    style="width:65px;padding:4px 8px;border-radius:6px;border:1.5px solid var(--card-border);background:white;color:var(--text-h);font-size:13px;text-align:center;" />
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="btnCopyGroup" style="width:100%;justify-content:center;">
+                            🔁 Bắt đầu sao chép thành viên
+                        </button>
+                        <button class="btn-outline" id="btnCopyGroupStop"
+                            style="width:100%;justify-content:center;margin-top:8px;display:none;">
+                            ■ Dừng
+                        </button>
+
+                        <div style="border-top:1px solid var(--card-border);margin:14px 0;"></div>
+
+                        <!-- Phê duyệt pending -->
+                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+                            🔔 <strong>Phê duyệt thành viên đang chờ</strong><br />
+                            <span>Chọn nhóm đích → nhấn nút bên dưới để tự động phê duyệt tất cả pending members</span>
+                        </div>
+                        <button class="btn-primary" id="btnApprovePending"
+                            style="width:100%;justify-content:center;background:linear-gradient(135deg,#f39c12,#e67e22);">
+                            ✅ Phê Duyệt Pending Members
+                        </button>
+
+                        <!-- Gửi link mời bypass -->
+                        <div style="font-size:11px;color:var(--text-muted);margin:10px 0 6px;">
+                            🔗 <strong>Gửi Link Mời (bypass pending - không cần admin)</strong><br />
+                            <span>Lấy members từ nhóm nguồn → gửi link join cho từng người qua DM. Link bypass hoàn toàn
+                                yêu cầu phê duyệt.</span>
+                        </div>
+                        <button class="btn-primary" id="btnForceJoinViaLink"
+                            style="width:100%;justify-content:center;background:linear-gradient(135deg,#27ae60,#2ecc71);">
+                            🔗 Gửi Link Mời (Non-Admin Bypass)
+                        </button>
+
+                        <!-- HYDRA 7-Layer Ultra Bypass -->
+                        <div style="font-size:11px;color:var(--text-muted);margin:10px 0 6px;">
+                            🐍 <strong>HYDRA — 7 Lớp Tấn Công (Tối đa hóa)</strong><br />
+                            <span>L1 Force-Add + L2 TempBridge + L3 Cascade + L4 PushInvite + L5 FRLink + L6 Wave-Retry
+                                + L7 AutoApprove.
+                                Tỷ lệ đạt gần 100% kể cả người bật "chặn thêm vào nhóm".</span>
+                        </div>
+                        <button id="btnHydra"
+                            style="width:100%;justify-content:center;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#c0392b,#e74c3c,#e67e22);color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;letter-spacing:0.3px;">
+                            🐍 HYDRA — 7-Layer Ultra Bypass
+                        </button>
+                    </div>
+
+                    <!-- Cột phải: Progress + Log -->
+                    <div style="flex:1.2;display:flex;flex-direction:column;gap:12px;">
+
+                        <!-- Progress card -->
+                        <div class="card" id="cpyProgressCard" style="display:none;">
+                            <div class="card-title">📊 Tiến Độ</div>
+                            <div
+                                style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                <span>Đã xử lý</span>
+                                <span id="cpyProgressText">0 / 0</span>
+                            </div>
+                            <div
+                                style="background:var(--card-border);border-radius:8px;height:10px;overflow:hidden;margin-bottom:12px;">
+                                <div id="cpyProgressBar"
+                                    style="height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:8px;transition:width 0.4s ease;">
+                                </div>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+                                <div style="background:rgba(72,199,142,0.1);border-radius:8px;padding:8px;">
+                                    <div style="font-size:18px;font-weight:700;color:#48c78e;" id="cpyCountOk">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted);">Thành công</div>
+                                </div>
+                                <div style="background:rgba(255,107,107,0.1);border-radius:8px;padding:8px;">
+                                    <div style="font-size:18px;font-weight:700;color:#ff6b6b;" id="cpyCountErr">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted);">Thất bại</div>
+                                </div>
+                                <div style="background:rgba(102,126,234,0.1);border-radius:8px;padding:8px;">
+                                    <div style="font-size:18px;font-weight:700;color:#667eea;" id="cpyCountTotal">0
+                                    </div>
+                                    <div style="font-size:10px;color:var(--text-muted);">Tổng</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Log -->
+                        <div class="card" style="flex:1;">
+                            <div class="card-title" style="display:flex;justify-content:space-between;">
+                                📋 Kết quả
+                                <button onclick="document.getElementById('cpyLog').innerHTML=''"
+                                    style="font-size:11px;background:none;border:none;color:var(--text-muted);cursor:pointer;">Xóa</button>
+                            </div>
+                            <div id="cpyLog"
+                                style="height:320px;overflow-y:auto;font-size:12px;font-family:monospace;background:#0d1117;border-radius:6px;padding:10px;color:#cdd9e5;display:flex;flex-direction:column;gap:2px;">
+                                <span style="color:#8b949e;">Chưa có kết quả. Chọn nhóm và bắt đầu sao chép...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main><!-- end main-area -->
+    </div><!-- end app-layout -->
+
+    <!-- ═══ MODALS ════════════════════════════════════════════════ -->
+
+    <!-- QR Login Modal -->
+    <div class="modal-overlay" id="qrModal" style="display:none">
+        <div class="modal" style="text-align:center;max-width:360px">
+            <div class="modal-head">
+                <h3>📱 Quét QR bằng Zalo</h3>
+                <button class="modal-x" onclick="closeModal('qrModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="qrStatus" style="margin-bottom:12px;color:#667eea;font-weight:600">⏳ Đang tạo mã QR...</div>
+                <img id="qrImage" src="" alt="QR Code"
+                    style="width:220px;height:220px;border-radius:12px;border:2px solid #eee;display:none" />
+                <p style="margin-top:12px;font-size:13px;color:#666">
+                    Mở <strong>Zalo</strong> trên điện thoại → nhấn biểu tượng QR → quét mã này
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cookie Guide -->
+    <div class="modal-overlay" id="cookieGuide" style="display:none">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>📖 Cách lấy Cookie Zalo</h3>
+                <button class="modal-x" onclick="closeModal('cookieGuide')">✕</button>
+            </div>
+            <div class="modal-body">
+                <ol class="steps">
+                    <li>Mở <strong>Google Chrome</strong> và truy cập <strong>zalo.me</strong></li>
+                    <li>Đăng nhập tài khoản Zalo của bạn</li>
+                    <li>Nhấn <kbd>F12</kbd> để mở DevTools</li>
+                    <li>Chọn tab <strong>Application</strong> (hoặc <strong>Storage</strong> trên Firefox)</li>
+                    <li>Mở <strong>Cookies → https://zalo.me</strong></li>
+                    <li>Sao chép toàn bộ giá trị → Dán vào ô Cookie ở Cài đặt</li>
+                </ol>
+                <div class="alert-warn">
+                    ⚠️ <strong>Bảo mật:</strong> Cookie = thông tin đăng nhập. Không chia sẻ với ai!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Select -->
+    <div class="modal-overlay" id="groupSelectModal" style="display:none">
+        <div class="modal modal-wide">
+            <div class="modal-head">
+                <h3>👥 Chọn nhóm để lấy thành viên</h3>
+                <button class="modal-x" onclick="closeModal('groupSelectModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" class="search-input" id="groupModalSearch" placeholder="Tìm nhóm..." />
+                <div class="group-select-list" id="groupSelectList"></div>
+                <div class="modal-foot">
+                    <span id="selectedGroupCount">0 nhóm đã chọn</span>
+                    <button class="btn-primary" id="btnConfirmGroups">Xác nhận</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Contact -->
+    <div class="modal-overlay" id="addContactModal" style="display:none">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>➕ Thêm liên hệ mới</h3>
+                <button class="modal-x" onclick="closeModal('addContactModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row"><label>Tên *</label><input type="text" class="text-field" id="ctName"
+                        placeholder="Nguyễn Văn A" /></div>
+                <div class="form-row"><label>Số điện thoại *</label><input type="text" class="text-field" id="ctPhone"
+                        placeholder="0901234567" /></div>
+                <div class="form-row"><label>Nhóm</label><input type="text" class="text-field" id="ctGroup"
+                        placeholder="Khách hàng, Đối tác..." /></div>
+                <button class="btn-primary" id="btnSaveCt" style="width:100%;justify-content:center">Lưu liên
+                    hệ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toastWrap"></div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>

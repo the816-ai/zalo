@@ -1,0 +1,48 @@
+{
+    "name": "zalo-bulk-tool",
+    "version": "2.1.0",
+    "description": "Zalo Bulk Tool Pro - Gửi tin & Kết bạn hàng loạt",
+    "main": "main.js",
+    "author": "ZaloBulk Pro",
+    "license": "MIT",
+    "scripts": {
+        "start": "electron .",
+        "dev": "electron . --dev",
+        "build": "electron-builder",
+        "build:win": "electron-builder --win"
+    },
+    "dependencies": {
+        "electron": "^28.3.3",
+        "puppeteer-core": "^24.38.0",
+        "zca-js": "^2.1.1"
+    },
+    "devDependencies": {
+        "electron-builder": "^24.13.3"
+    },
+    "build": {
+        "appId": "com.zalobulk.pro",
+        "productName": "Zalo Bulk Tool Pro",
+        "copyright": "Copyright © 2025 ZaloBulk Pro",
+        "directories": {
+            "output": "dist"
+        },
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "assets/icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "Zalo Bulk Tool Pro"
+        }
+    }
+}
