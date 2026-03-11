@@ -469,45 +469,195 @@ function startBulkSend() {
         return;
     }
 
-    // Mode phone
+    // Mode phone — with full anti-ban protection
     const phones = getPhones('phoneInput');
     if (!phones.length) { toast('Nhập danh sách số điện thoại!', 'warning'); return; }
 
-    S.send = { running: true, paused: false, ok: 0, err: 0, wait: phones.length };
+    const CHECKPOINT_KEY = 'bulk_send_cp_phone';
+    const QUOTA_KEY = 'zalo_send_quota';
+    const BAN_KEYWORDS = ['spam', 'ban', 'blocked', 'flood', 'tài khoản bị', 'khoá', 'bị khóa', 'không hợp lệ', 'quá số lần'];
+
+    // ── Quota system (shared with group mode) ──
+    const getQuota = () => {
+        try {
+            const q = JSON.parse(localStorage.getItem(QUOTA_KEY) || '{}');
+            const today = new Date().toDateString();
+            const hour = new Date().getHours();
+            if (q.date !== today) return { date: today, hour, hourCount: 0, dayCount: 0 };
+            if (q.hour !== hour) return { ...q, hour, hourCount: 0 };
+            return q;
+        } catch (e) { return { date: new Date().toDateString(), hour: new Date().getHours(), hourCount: 0, dayCount: 0 }; }
+    };
+    const saveQuota = (q) => { try { localStorage.setItem(QUOTA_KEY, JSON.stringify(q)); } catch (e) { } };
+    const MAX_PER_HOUR = Math.max(1, parseInt(document.getElementById('maxPerHour')?.value) || 30);
+    const MAX_PER_DAY = Math.max(1, parseInt(document.getElementById('maxPerDay')?.value) || 200);
+    const COOLDOWN_EVERY = 10;
+    const COOLDOWN_TIME = 30000;
+
+    // ── Message variation ──
+    const INVISIBLE_CHARS = ['\u200b', '\u200c', '\u200d', '\ufeff'];
+    const variantMsg = (baseMsg) => {
+        let result = baseMsg;
+        const numChars = Math.floor(Math.random() * 2) + 1;
+        for (let i = 0; i < numChars; i++) {
+            const pos = Math.floor(Math.random() * result.length);
+            const ch = INVISIBLE_CHARS[Math.floor(Math.random() * INVISIBLE_CHARS.length)];
+            result = result.slice(0, pos) + ch + result.slice(pos);
+        }
+        return result;
+    };
+
+    // ── Gaussian delay ──
+    const gaussianDelay = (baseMs) => {
+        const u1 = Math.random(), u2 = Math.random();
+        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        const deviation = baseMs * 0.3;
+        return Math.max(baseMs * 0.5, baseMs + z * deviation);
+    };
+
+    // ── Checkpoint resume ──
+    const msgText = document.getElementById('msgInput').value.trim();
+    let startIdx = 0;
+    try {
+        const cp = JSON.parse(localStorage.getItem(CHECKPOINT_KEY) || 'null');
+        if (cp && cp.msg === msgText && cp.total === phones.length) {
+            startIdx = cp.nextIdx;
+            if (startIdx > 0) log('info', `♻️ Resume từ ${startIdx}/${phones.length}`, 'send');
+        }
+    } catch (e) { }
+
+    S.send = { running: true, paused: false, ok: 0, err: 0, wait: phones.length - startIdx, retryQueue: [] };
     setSendBtns(true);
     document.getElementById('sendProgressCard').style.display = 'block';
-    updateSendProgress(0, phones.length);
-    log('info', `📤 Bắt đầu gửi ${phones.length} tin nhắn...`, 'send');
+    updateSendProgress(startIdx, phones.length);
+    updateSendStats();
 
-    const delay = parseInt(document.getElementById('sendDelay').value) * 1000;
+    const baseDelay = parseInt(document.getElementById('sendDelay').value) * 1000;
     const rand = document.getElementById('randomDelay').checked;
     const stopErr = document.getElementById('stopOnFail').checked;
-    let idx = 0;
+    const useVariation = document.getElementById('msgVariation')?.checked !== false;
+    const useCooldown = document.getElementById('enableCooldown')?.checked !== false;
+    let idx = startIdx;
+    let consecutiveErr = 0;
+    let sessionSent = 0;
+
+    const saveCheckpoint = () => {
+        try { localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ msg: msgText, total: phones.length, nextIdx: idx, ok: S.send.ok, err: S.send.err })); } catch (e) { }
+    };
+    const clearCheckpoint = () => { try { localStorage.removeItem(CHECKPOINT_KEY); } catch (e) { } };
+
+    toast(`🛡️ Anti-ban ON | Max ${MAX_PER_HOUR}/giờ, ${MAX_PER_DAY}/ngày | ${phones.length} SĐT`, 'info');
+    let cooldownFired = false; // Fix #5: prevent cooldown infinite loop
 
     const next = () => {
-        if (!S.send.running || S.send.paused) return;
-        if (idx >= phones.length) {
-            log('success', `✅ Hoàn thành! ${S.send.ok} thành công, ${S.send.err} thất bại.`, 'send');
-            toast(`Hoàn thành! ${S.send.ok}/${phones.length} tin`, 'success');
-            stopBulkSend(); return;
-        }
-        const phone = phones[idx];
-        log('info', `📨 Gửi → ${phone}`, 'send');
+        if (!S.send.running || S.send.paused) { saveCheckpoint(); return; }
 
-        simulateSend(phone, document.getElementById('msgInput').value.trim()).then(res => {
+        // ── Quota check ──
+        const quota = getQuota();
+        if (quota.hourCount >= MAX_PER_HOUR) {
+            const waitMin = Math.max(1, 60 - new Date().getMinutes()); // Fix #7: min 1 minute
+            log('warning', `🛡️ Đạt giới hạn ${MAX_PER_HOUR}/giờ → nghỉ ${waitMin} phút`, 'send');
+            saveCheckpoint();
+            S.send.paused = true;
+            sendTimer = setTimeout(() => { S.send.paused = false; log('info', '▶ Tiếp tục sau cool-down giờ...', 'send'); next(); }, waitMin * 60 * 1000);
+            return;
+        }
+        if (quota.dayCount >= MAX_PER_DAY) {
+            log('warning', `🛡️ Đạt giới hạn ${MAX_PER_DAY}/ngày → dừng hôm nay`, 'send');
+            toast(`Dừng! Đã gửi ${MAX_PER_DAY} tin hôm nay. Tiếp tục ngày mai.`, 'warning');
+            saveCheckpoint(); stopBulkSend(); return;
+        }
+
+        // ── Cooldown every N messages (Fix #5: use flag to prevent re-trigger) ──
+        if (useCooldown && sessionSent > 0 && sessionSent % COOLDOWN_EVERY === 0 && !cooldownFired) {
+            cooldownFired = true;
+            log('info', `☕ Cool-down ${COOLDOWN_TIME / 1000}s sau ${sessionSent} tin...`, 'send');
+            sendTimer = setTimeout(next, COOLDOWN_TIME);
+            return;
+        }
+        cooldownFired = false;
+
+        // Retry queue
+        if (S.send.retryQueue.length > 0 && idx >= phones.length) {
+            const retryPhone = S.send.retryQueue.shift();
+            log('warning', `🔄 Retry → ${retryPhone}`, 'send');
+            simulateSend(retryPhone, useVariation ? variantMsg(msgText) : msgText).then(r => {
+                const ok = r && r.success !== undefined ? r.success : r;
+                if (ok) {
+                    S.send.ok++; log('success', `✅ Retry OK → ${retryPhone}`, 'send');
+                    // Fix #8: count retry toward quota
+                    sessionSent++;
+                    const q = getQuota(); q.hourCount = (q.hourCount || 0) + 1; q.dayCount = (q.dayCount || 0) + 1; saveQuota(q); updateQuotaUI();
+                } else { log('error', `❌ Retry fail → ${retryPhone}`, 'send'); }
+                updateSendStats();
+                sendTimer = setTimeout(next, baseDelay * 2);
+            });
+            return;
+        }
+
+        if (idx >= phones.length && S.send.retryQueue.length === 0) {
+            log('success', `🎉 Hoàn thành! ${S.send.ok}/${phones.length} OK | ${S.send.err} lỗi`, 'send');
+            toast(`Xong! ${S.send.ok}/${phones.length} OK`, S.send.err === 0 ? 'success' : 'warning');
+            clearCheckpoint(); stopBulkSend(); return;
+        }
+
+        const phone = phones[idx];
+        const remaining = phones.length - startIdx;
+        const pct = remaining > 0 ? Math.round(((idx - startIdx) / remaining) * 100) : 100; // Fix #4: division by zero
+        log('info', `[📤 ${idx + 1}/${phones.length} - ${pct}%] → ${phone}`, 'send');
+
+        const msgToSend = useVariation ? variantMsg(msgText) : msgText;
+
+        simulateSend(phone, msgToSend).then(res => {
             const ok = res && res.success !== undefined ? res.success : res;
-            const errMsg = (res && res.error) ? ` (${res.error})` : '';
-            if (ok) { S.send.ok++; log('success', `✅ ${phone}`, 'send'); }
-            else {
-                S.send.err++; log('error', `❌ ${phone}${errMsg}`, 'send');
-                if (stopErr) { stopBulkSend(); return; }
+            const errMsg = (res && res.error) ? String(res.error) : '';
+            if (ok) {
+                S.send.ok++;
+                consecutiveErr = 0;
+                sessionSent++;
+                // Update quota
+                const q = getQuota();
+                q.hourCount = (q.hourCount || 0) + 1;
+                q.dayCount = (q.dayCount || 0) + 1;
+                saveQuota(q);
+                updateQuotaUI();
+                log('success', `✅ → ${phone} [${q.hourCount}/h, ${q.dayCount}/d]`, 'send');
+            } else {
+                S.send.err++;
+                consecutiveErr++;
+                log('error', `❌ → ${phone}: ${errMsg}`, 'send');
+
+                // ── Ban detection ──
+                const isBanSignal = BAN_KEYWORDS.some(k => errMsg.toLowerCase().includes(k.toLowerCase()));
+                if (isBanSignal) {
+                    log('warning', `🚨 PHÁT HIỆN TÍN HIỆU BAN! → Tự động dừng 30 phút`, 'send');
+                    toast('🚨 Có dấu hiệu bị ban! Đã tự dừng 30 phút.', 'error');
+                    saveCheckpoint();
+                    S.send.paused = true;
+                    sendTimer = setTimeout(() => { S.send.paused = false; consecutiveErr = 0; log('info', '▶ Tiếp tục sau ban-pause 30 phút...', 'send'); next(); }, 30 * 60 * 1000);
+                    return;
+                }
+
+                const isRetryable = !errMsg.includes('tham số') && !errMsg.includes('Bản thân');
+                if (isRetryable && S.send.retryQueue.length < 50) S.send.retryQueue.push(phone);
+                if (stopErr) { saveCheckpoint(); stopBulkSend(); return; }
             }
+
             S.send.wait = phones.length - idx - 1;
             updateSendStats();
             updateSendProgress(++idx, phones.length);
-            sendTimer = setTimeout(next, rand ? delay * (.7 + Math.random() * .6) : delay);
+            saveCheckpoint();
+
+            // Gaussian delay + adaptive
+            let delay = rand ? gaussianDelay(baseDelay) : baseDelay;
+            if (consecutiveErr >= 3) { delay *= 2; log('warning', `⚠️ ${consecutiveErr} lỗi → delay x2: ${Math.round(delay / 1000)}s`, 'send'); }
+            if (consecutiveErr >= 7) { delay = 120000; consecutiveErr = 0; log('warning', '🛑 7+ lỗi → nghỉ 2 phút', 'send'); }
+            sendTimer = setTimeout(next, delay);
         });
     };
+
+    // Fix #1: Store reference so pauseBulkSend can resume without re-calling startBulkSend
+    S.send._nextFn = next;
     next();
 }
 
@@ -587,6 +737,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
     const clearCheckpoint = () => { try { localStorage.removeItem(CHECKPOINT_KEY); } catch (e) { } };
 
     toast(`🛡️ Anti-ban ON | Max ${MAX_PER_HOUR}/giờ, ${MAX_PER_DAY}/ngày | ${members.length} thành viên`, 'info');
+    let cooldownFired = false; // Fix #5: prevent cooldown infinite loop
 
     const nextMember = () => {
         if (!S.send.running || S.send.paused) { saveCheckpoint(); return; }
@@ -594,7 +745,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
         // ── Kiểm tra Quota ──
         const quota = getQuota();
         if (quota.hourCount >= MAX_PER_HOUR) {
-            const waitMin = 60 - new Date().getMinutes();
+            const waitMin = Math.max(1, 60 - new Date().getMinutes()); // Fix #7
             log('warning', `🛡️ Đạt giới hạn ${MAX_PER_HOUR}/giờ → nghỉ ${waitMin} phút để tránh ban`, 'send');
             saveCheckpoint();
             S.send.paused = true;
@@ -611,12 +762,14 @@ function doSendToMembers(members, groupName, cookie, msg) {
             saveCheckpoint(); stopBulkSend(); return;
         }
 
-        // ── Cool-down sau mỗi COOLDOWN_EVERY tin (nếu bật) ──
-        if (useCooldown && sessionSent > 0 && sessionSent % COOLDOWN_EVERY === 0) {
+        // ── Cool-down sau mỗi COOLDOWN_EVERY tin (Fix #5: flag) ──
+        if (useCooldown && sessionSent > 0 && sessionSent % COOLDOWN_EVERY === 0 && !cooldownFired) {
+            cooldownFired = true;
             log('info', `☕ Cool-down ${COOLDOWN_TIME / 1000}s sau ${sessionSent} tin...`, 'send');
             sendTimer = setTimeout(nextMember, COOLDOWN_TIME);
             return;
         }
+        cooldownFired = false;
 
         // Retry queue
         if (S.send.retryQueue.length > 0 && idx >= members.length) {
@@ -624,8 +777,12 @@ function doSendToMembers(members, groupName, cookie, msg) {
             const rm = members.find(m => m.uid === retryUid) || { uid: retryUid, name: retryUid.slice(-6) };
             log('warning', `🔄 Retry → ${rm.name}`, 'send');
             el.zalo.sendMessageByUid(cookie, retryUid, variantMsg(msg)).then(r => {
-                if (r.success) { S.send.ok++; log('success', `✅ Retry OK → ${rm.name}`, 'send'); }
-                else { log('error', `❌ Retry fail → ${rm.name}`, 'send'); }
+                if (r.success) {
+                    S.send.ok++; log('success', `✅ Retry OK → ${rm.name}`, 'send');
+                    // Fix #8: count retry toward quota
+                    sessionSent++;
+                    const q = getQuota(); q.hourCount = (q.hourCount || 0) + 1; q.dayCount = (q.dayCount || 0) + 1; saveQuota(q); updateQuotaUI();
+                } else { log('error', `❌ Retry fail → ${rm.name}`, 'send'); }
                 updateSendStats();
                 sendTimer = setTimeout(nextMember, baseDelay * 2);
             });
@@ -639,7 +796,8 @@ function doSendToMembers(members, groupName, cookie, msg) {
         }
 
         const m = members[idx];
-        const pct = Math.round(((idx - startIdx) / (members.length - startIdx)) * 100);
+        const remaining = members.length - startIdx;
+        const pct = remaining > 0 ? Math.round(((idx - startIdx) / remaining) * 100) : 100; // Fix #4
         log('info', `[📤 ${idx + 1}/${members.length} - ${pct}%] → ${m.name}`, 'send');
 
         // Variation message để tránh spam filter (nếu bật)
@@ -655,7 +813,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
                 q.hourCount = (q.hourCount || 0) + 1;
                 q.dayCount = (q.dayCount || 0) + 1;
                 saveQuota(q);
-                updateQuotaUI(); // Cập nhật progress bars real-time
+                updateQuotaUI();
 
                 const via = r.via === 'friend_request' ? ' 🤝' : r.via === 'friend_request_pending' ? ' ✉️' : r.via === 'direct_retry' ? ' 🔁' : '';
                 log('success', `✅ → ${m.name}${via} [${q.hourCount}/h, ${q.dayCount}/d]`, 'send');
@@ -677,7 +835,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
                         consecutiveErr = 0;
                         log('info', '▶ Tiếp tục sau ban-pause 30 phút...', 'send');
                         nextMember();
-                    }, 30 * 60 * 1000); // 30 phút
+                    }, 30 * 60 * 1000);
                     return;
                 }
 
@@ -701,6 +859,8 @@ function doSendToMembers(members, groupName, cookie, msg) {
             sendTimer = setTimeout(nextMember, delay);
         });
     };
+    // Fix #1: Store reference for pause/resume
+    S.send._nextFn = nextMember;
     nextMember();
 }
 
@@ -719,7 +879,8 @@ function pauseBulkSend() {
     } else {
         btn.textContent = '⏸ Tạm dừng';
         log('info', '▶ Tiếp tục gửi tin...', 'send');
-        startBulkSend();
+        // Fix #1: Resume existing loop instead of creating a new one
+        if (S.send._nextFn) S.send._nextFn();
     }
 }
 
@@ -852,36 +1013,211 @@ function startFriend() {
     const limit = parseInt(document.getElementById('frLimit').value) || 50;
     const toSend = phones.slice(0, limit);
 
-    S.friend = { running: true, paused: false, sent: 0, ok: 0, pend: toSend.length, fail: 0 };
+    const CHECKPOINT_KEY = 'bulk_friend_cp';
+    const QUOTA_KEY = 'zalo_friend_quota';
+    const BAN_KEYWORDS = ['spam', 'ban', 'blocked', 'flood', 'tài khoản bị', 'khoá', 'bị khóa', 'không hợp lệ', 'quá số lần'];
+
+    // ── Friend Quota system ──
+    const getQuota = () => {
+        try {
+            const q = JSON.parse(localStorage.getItem(QUOTA_KEY) || '{}');
+            const today = new Date().toDateString();
+            const hour = new Date().getHours();
+            if (q.date !== today) return { date: today, hour, hourCount: 0, dayCount: 0 };
+            if (q.hour !== hour) return { ...q, hour, hourCount: 0 };
+            return q;
+        } catch (e) { return { date: new Date().toDateString(), hour: new Date().getHours(), hourCount: 0, dayCount: 0 }; }
+    };
+    const saveQuota = (q) => { try { localStorage.setItem(QUOTA_KEY, JSON.stringify(q)); } catch (e) { } };
+    const MAX_PER_HOUR = Math.max(1, parseInt(document.getElementById('frMaxPerHour')?.value) || 15);
+    const MAX_PER_DAY = Math.max(1, parseInt(document.getElementById('frMaxPerDay')?.value) || 50);
+    const COOLDOWN_EVERY = 8;
+    const COOLDOWN_TIME = 20000;
+
+    // ── Gaussian delay ──
+    const gaussianDelay = (baseMs) => {
+        const u1 = Math.random(), u2 = Math.random();
+        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        const deviation = baseMs * 0.3;
+        return Math.max(baseMs * 0.5, baseMs + z * deviation);
+    };
+
+    // ── Checkpoint resume ──
+    let startIdx = 0;
+    try {
+        const cp = JSON.parse(localStorage.getItem(CHECKPOINT_KEY) || 'null');
+        if (cp && cp.total === toSend.length) {
+            startIdx = cp.nextIdx;
+            if (startIdx > 0) log('info', `♻️ Resume từ ${startIdx}/${toSend.length}`, 'fr');
+        }
+    } catch (e) { }
+
+    S.friend = { running: true, paused: false, sent: 0, ok: 0, pend: toSend.length - startIdx, fail: 0, retryQueue: [] };
     setFrBtns(true);
     document.getElementById('frProgressCard').style.display = 'block';
-    updateFrProgress(0, toSend.length);
-    log('info', `🤝 Bắt đầu gửi ${toSend.length} lời mời kết bạn...`, 'fr');
+    updateFrProgress(startIdx, toSend.length);
+    updateFrStats();
 
-    const delay = parseInt(document.getElementById('frDelay').value) * 1000;
+    const baseDelay = parseInt(document.getElementById('frDelay').value) * 1000;
     const rand = document.getElementById('frRandom').checked;
-    let idx = 0;
+    const useCooldown = document.getElementById('frEnableCooldown')?.checked !== false;
+    let idx = startIdx;
+    let consecutiveErr = 0;
+    let sessionSent = 0;
+
+    const saveCheckpoint = () => {
+        try { localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ total: toSend.length, nextIdx: idx, sent: S.friend.sent, fail: S.friend.fail })); } catch (e) { }
+    };
+    const clearCheckpoint = () => { try { localStorage.removeItem(CHECKPOINT_KEY); } catch (e) { } };
+
+    // ── Update Friend Quota UI ──
+    const updateFrQuotaUI = () => {
+        try {
+            const maxH = MAX_PER_HOUR;
+            const maxD = MAX_PER_DAY;
+            const q = getQuota();
+            const hCount = q.hourCount || 0;
+            const dCount = q.dayCount || 0;
+            const hPct = Math.min(100, (hCount / maxH) * 100);
+            const dPct = Math.min(100, (dCount / maxD) * 100);
+
+            const el_hBar = document.getElementById('frQuotaHourBar');
+            const el_dBar = document.getElementById('frQuotaDayBar');
+            const el_hTxt = document.getElementById('frQuotaHourText');
+            const el_dTxt = document.getElementById('frQuotaDayText');
+            const el_status = document.getElementById('frAntiBanStatus');
+
+            if (el_hBar) el_hBar.style.width = hPct + '%';
+            if (el_dBar) el_dBar.style.width = dPct + '%';
+            if (el_hTxt) el_hTxt.textContent = `${hCount} / ${maxH}`;
+            if (el_dTxt) el_dTxt.textContent = `${dCount} / ${maxD}`;
+
+            if (el_hBar) el_hBar.style.background = hPct > 80
+                ? 'linear-gradient(90deg,#ff6b6b,#ee5a24)'
+                : hPct > 60 ? 'linear-gradient(90deg,#feca57,#ff9f43)'
+                    : 'linear-gradient(90deg,#48c78e,#06d6a0)';
+
+            if (el_status) {
+                const maxPct = Math.max(hPct, dPct);
+                if (maxPct >= 100) { el_status.textContent = '🔴 Đạt giới hạn'; el_status.style.color = '#ff6b6b'; el_status.style.background = 'rgba(255,107,107,0.15)'; }
+                else if (maxPct >= 70) { el_status.textContent = '🟡 Cảnh báo'; el_status.style.color = '#feca57'; el_status.style.background = 'rgba(254,202,87,0.15)'; }
+                else { el_status.textContent = '🟢 An toàn'; el_status.style.color = '#48c78e'; el_status.style.background = 'rgba(72,199,142,0.15)'; }
+            }
+        } catch (e) { }
+    };
+
+    toast(`🛡️ Anti-ban ON | Max ${MAX_PER_HOUR}/giờ, ${MAX_PER_DAY}/ngày | ${toSend.length} lời mời`, 'info');
+    updateFrQuotaUI();
+    let cooldownFired = false; // Fix #5
 
     const next = () => {
-        if (!S.friend.running || S.friend.paused) return;
-        if (idx >= toSend.length) {
-            log('success', `✅ Hoàn thành! Đã gửi ${S.friend.sent} lời mời.`, 'fr');
-            toast(`Xong! ${S.friend.sent} lời mời kết bạn`, 'success');
-            stopFriend(); return;
+        if (!S.friend.running || S.friend.paused) { saveCheckpoint(); return; }
+
+        // ── Quota check ──
+        const quota = getQuota();
+        if (quota.hourCount >= MAX_PER_HOUR) {
+            const waitMin = Math.max(1, 60 - new Date().getMinutes()); // Fix #7
+            log('warning', `🛡️ Đạt giới hạn ${MAX_PER_HOUR} kết bạn/giờ → nghỉ ${waitMin} phút`, 'fr');
+            saveCheckpoint();
+            S.friend.paused = true;
+            frTimer = setTimeout(() => { S.friend.paused = false; log('info', '▶ Tiếp tục sau cool-down giờ...', 'fr'); next(); }, waitMin * 60 * 1000);
+            return;
         }
+        if (quota.dayCount >= MAX_PER_DAY) {
+            log('warning', `🛡️ Đạt giới hạn ${MAX_PER_DAY} kết bạn/ngày → dừng hôm nay`, 'fr');
+            toast(`Dừng! Đã gửi ${MAX_PER_DAY} lời mời hôm nay. Tiếp tục ngày mai.`, 'warning');
+            saveCheckpoint(); stopFriend(); return;
+        }
+
+        // ── Cooldown every N requests (Fix #5: flag) ──
+        if (useCooldown && sessionSent > 0 && sessionSent % COOLDOWN_EVERY === 0 && !cooldownFired) {
+            cooldownFired = true;
+            log('info', `☕ Cool-down ${COOLDOWN_TIME / 1000}s sau ${sessionSent} lời mời...`, 'fr');
+            frTimer = setTimeout(next, COOLDOWN_TIME);
+            return;
+        }
+        cooldownFired = false;
+
+        // Retry queue
+        if (S.friend.retryQueue.length > 0 && idx >= toSend.length) {
+            const retryPhone = S.friend.retryQueue.shift();
+            log('warning', `🔄 Retry → ${retryPhone}`, 'fr');
+            simulateFriend(retryPhone).then(r => {
+                const result = typeof r === 'object' ? r : { status: r };
+                if (result.status === 'ok' || result === 'ok') {
+                    S.friend.sent++; S.friend.ok++; log('success', `✅ Retry OK → ${retryPhone}`, 'fr');
+                    // Fix #8: count retry toward quota
+                    sessionSent++;
+                    const q = getQuota(); q.hourCount = (q.hourCount || 0) + 1; q.dayCount = (q.dayCount || 0) + 1; saveQuota(q); updateFrQuotaUI();
+                } else { log('error', `❌ Retry fail → ${retryPhone}`, 'fr'); }
+                updateFrStats();
+                frTimer = setTimeout(next, baseDelay * 2);
+            });
+            return;
+        }
+
+        if (idx >= toSend.length && S.friend.retryQueue.length === 0) {
+            log('success', `🎉 Hoàn thành! ${S.friend.sent}/${toSend.length} lời mời OK | ${S.friend.fail} lỗi`, 'fr');
+            toast(`Xong! ${S.friend.sent} lời mời kết bạn`, 'success');
+            clearCheckpoint(); stopFriend(); return;
+        }
+
         const phone = toSend[idx];
-        log('info', `📨 Kết bạn → ${phone}`, 'fr');
+        const remaining = toSend.length - startIdx;
+        const pct = remaining > 0 ? Math.round(((idx - startIdx) / remaining) * 100) : 100; // Fix #4
+        log('info', `[🤝 ${idx + 1}/${toSend.length} - ${pct}%] → ${phone}`, 'fr');
 
         simulateFriend(phone).then(r => {
-            if (r === 'ok') { S.friend.sent++; S.friend.ok++; log('success', `✅ Gửi lời mời → ${phone}`, 'fr'); }
-            else if (r === 'already') { log('warning', `⚠️ ${phone} đã là bạn bè`, 'fr'); }
-            else { S.friend.fail++; log('error', `❌ Không tìm thấy ${phone}`, 'fr'); }
+            // Fix #10: r can be 'ok', 'already', or { status: 'fail', error: '...' }
+            const status = typeof r === 'object' ? r.status : r;
+            const errMsg = typeof r === 'object' ? (r.error || 'fail') : (r || 'fail');
+
+            if (status === 'ok') {
+                S.friend.sent++;
+                S.friend.ok++;
+                consecutiveErr = 0;
+                sessionSent++;
+                const q = getQuota();
+                q.hourCount = (q.hourCount || 0) + 1;
+                q.dayCount = (q.dayCount || 0) + 1;
+                saveQuota(q);
+                updateFrQuotaUI();
+                log('success', `✅ Gửi lời mời → ${phone} [${q.hourCount}/h, ${q.dayCount}/d]`, 'fr');
+            } else if (status === 'already') {
+                log('warning', `⚠️ ${phone} đã là bạn bè`, 'fr');
+            } else {
+                S.friend.fail++;
+                consecutiveErr++;
+                log('error', `❌ Không tìm thấy ${phone}: ${errMsg}`, 'fr');
+
+                // ── Ban detection (Fix #10: now errMsg contains actual error) ──
+                const isBanSignal = BAN_KEYWORDS.some(k => errMsg.toLowerCase().includes(k.toLowerCase()));
+                if (isBanSignal) {
+                    log('warning', `🚨 PHÁT HIỆN TÍN HIỆU BAN! → Tự động dừng 30 phút`, 'fr');
+                    toast('🚨 Có dấu hiệu bị ban! Đã tự dừng 30 phút.', 'error');
+                    saveCheckpoint();
+                    S.friend.paused = true;
+                    frTimer = setTimeout(() => { S.friend.paused = false; consecutiveErr = 0; log('info', '▶ Tiếp tục sau ban-pause 30 phút...', 'fr'); next(); }, 30 * 60 * 1000);
+                    return;
+                }
+
+                if (S.friend.retryQueue.length < 30) S.friend.retryQueue.push(phone);
+            }
+
             S.friend.pend = toSend.length - idx - 1;
             updateFrStats();
             updateFrProgress(++idx, toSend.length);
-            frTimer = setTimeout(next, rand ? delay * (.8 + Math.random() * .4) : delay);
+            saveCheckpoint();
+
+            // Gaussian delay + adaptive
+            let delay = rand ? gaussianDelay(baseDelay) : baseDelay;
+            if (consecutiveErr >= 3) { delay *= 2; log('warning', `⚠️ ${consecutiveErr} lỗi → delay x2: ${Math.round(delay / 1000)}s`, 'fr'); }
+            if (consecutiveErr >= 5) { delay = 120000; consecutiveErr = 0; log('warning', '🛑 5+ lỗi → nghỉ 2 phút', 'fr'); }
+            frTimer = setTimeout(next, delay);
         });
     };
+    // Fix #2: Store reference for pauseFriend
+    S.friend._nextFn = next;
     next();
 }
 
@@ -893,7 +1229,8 @@ function pauseFriend() {
         clearTimeout(frTimer);
     } else {
         btn.textContent = '⏸ Tạm dừng';
-        startFriend();
+        // Fix #2: Resume existing loop instead of creating a new one
+        if (S.friend._nextFn) S.friend._nextFn();
     }
 }
 
@@ -1219,15 +1556,20 @@ async function simulateSend(phone, message) {
 
 async function simulateFriend(phone) {
     if (el.zalo && S.cookie) {
-        const r = await el.zalo.sendFriendRequest(S.cookie, phone, document.getElementById('frMsgInput').value.trim());
-        if (r.success) return 'ok';
-        if (r.already) return 'already';
-        if (r.pending) return 'already';
-        return 'fail';
+        try {
+            const r = await el.zalo.sendFriendRequest(S.cookie, phone, document.getElementById('frMsgInput').value.trim());
+            if (r.success) return 'ok';
+            if (r.already) return 'already';
+            if (r.pending) return 'already';
+            // Fix #10: Return error message for ban detection instead of plain 'fail'
+            return { status: 'fail', error: r.error || 'Unknown error' };
+        } catch (e) {
+            return { status: 'fail', error: e.message };
+        }
     }
     // fallback
     const v = Math.random();
-    return v > 0.15 ? 'ok' : v > 0.08 ? 'already' : 'fail';
+    return v > 0.15 ? 'ok' : v > 0.08 ? 'already' : { status: 'fail', error: 'simulated failure' };
 }
 
 function readFile(e, taId, cb) {

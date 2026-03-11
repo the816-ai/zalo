@@ -505,6 +505,67 @@
                             </div>
                         </div>
 
+                        <!-- Anti-Ban Protection Panel for Friend Requests -->
+                        <div id="frAntiBanPanel"
+                            style="background:linear-gradient(135deg,rgba(118,75,162,0.1),rgba(102,126,234,0.08));border:1px solid rgba(118,75,162,0.3);border-radius:12px;padding:14px;margin-bottom:12px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                                <span style="font-size:16px;">🛡️</span>
+                                <b style="font-size:13px;color:var(--text-h);flex:1">Bảo Vệ Tài Khoản (Kết Bạn)</b>
+                                <span id="frAntiBanStatus"
+                                    style="font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(72,199,142,0.15);color:#48c78e;font-weight:700;">🟢
+                                    An toàn</span>
+                            </div>
+                            <div style="margin-bottom:8px;">
+                                <div
+                                    style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+                                    <span>Kết bạn giờ này</span>
+                                    <span id="frQuotaHourText" style="font-weight:600;">0 / 15</span>
+                                </div>
+                                <div
+                                    style="background:rgba(255,255,255,0.06);border-radius:6px;height:6px;overflow:hidden;">
+                                    <div id="frQuotaHourBar"
+                                        style="height:100%;width:0%;background:linear-gradient(90deg,#48c78e,#06d6a0);border-radius:6px;transition:width 0.5s ease;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <div
+                                    style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+                                    <span>Kết bạn hôm nay</span>
+                                    <span id="frQuotaDayText" style="font-weight:600;">0 / 50</span>
+                                </div>
+                                <div
+                                    style="background:rgba(255,255,255,0.06);border-radius:6px;height:6px;overflow:hidden;">
+                                    <div id="frQuotaDayBar"
+                                        style="height:100%;width:0%;background:linear-gradient(90deg,#764ba2,#667eea);border-radius:6px;transition:width 0.5s ease;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                                <div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">⏱ Max/giờ
+                                    </div>
+                                    <input type="number" id="frMaxPerHour" min="1" max="999" value="15"
+                                        style="width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--card-border);background:white;color:var(--text-h);font-size:14px;font-weight:700;text-align:center;" />
+                                </div>
+                                <div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">📅 Max/ngày
+                                    </div>
+                                    <input type="number" id="frMaxPerDay" min="1" max="9999" value="50"
+                                        style="width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--card-border);background:white;color:var(--text-h);font-size:14px;font-weight:700;text-align:center;" />
+                                </div>
+                            </div>
+                            <div
+                                style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
+                                <span style="font-size:12px;color:var(--text-muted);">☕ Cool-down mỗi 8 lời mời
+                                    (20s)</span>
+                                <label class="switch" style="transform:scale(0.8);">
+                                    <input type="checkbox" id="frEnableCooldown" checked />
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="btn-row">
                             <button class="btn-primary" id="btnStartFr">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

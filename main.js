@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const zaloApi = require('./zalo-api');
@@ -44,7 +44,7 @@ function createWindow() {
     // Show when ready (prevents white flash)
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
-        mainWindow.webContents.openDevTools({ mode: 'detach' }); // DEBUG
+        // DevTools only via --dev flag (see L75-77)
     });
 
 
@@ -167,7 +167,7 @@ ipcMain.handle('zalo:verify', async (_e, cookie) => {
 
 ipcMain.handle('zalo:getGroups', async (_e, cookie) => {
     try {
-        console.log('[GROUPS] Loading groups, cookie:', cookie?.slice(0, 20));
+        console.log('[GROUPS] Loading groups...');
         const result = await zaloApi.getGroups(cookie);
         console.log('[GROUPS] Result:', result.success, 'count:', result.groups?.length, result.error || '');
         return result;
@@ -181,7 +181,7 @@ ipcMain.handle('zalo:sendMessage', async (_e, cookie, phone, message) => {
     try {
         console.log('[SEND] calling sendMessage for', phone);
         const result = await zaloApi.sendMessage(cookie, phone, message);
-        console.log('[SEND] result:', JSON.stringify(result));
+        console.log('[SEND] result: success=', result.success);
         return result;
     } catch (err) {
         console.error('[SEND] EXCEPTION:', err.message, err.stack?.slice(0, 300));
@@ -262,7 +262,7 @@ ipcMain.handle('zalo:getGroupMembers', async (_e, cookie, groupId) => {
 ipcMain.handle('zalo:sendMessageByUid', async (_e, cookie, uid, message) => {
     try {
         const r = await zaloApi.sendMessageByUid(cookie, uid, message);
-        console.log(`[SEND_UID] uid=${uid} result:`, JSON.stringify(r));
+        console.log(`[SEND_UID] uid=${uid} success=${r.success}`);
         return r;
     } catch (err) {
         return { success: false, uid, error: err.message };

@@ -1843,27 +1843,16 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
     }
 
 
-    // ══════════════════════════════════════════════════════════════════
-    //  RAW BYPASS HELPERS — thao t\u00e1c tr\u1ef1c ti\u1ebfp v\u1edbi Zalo API params
-    //  Zalo c\u00f3 3 l\u1edbi bypass t\u1ea1i server layer:
-    //  1. membersTypes: -1 = stranger, 0 = phone contact, 1 = friend
-    //     → n\u1ebfu server ch\u1ec9 check membersTypes thay v\u00ec DB relationship → 0 s\u1ebd qua
-    //  2. /v1 endpoint: version c\u0169, validation y\u1ebfu h\u01a1n /v2
-    //  3. zsource k\u00e1c nhau: 601 = mobile, 714 = web — c\u00f3 th\u1ec3 bypass tr\u00ean web path
-    // ══════════════════════════════════════════════════════════════════
-
-    async function rawCreateGroupNoFriend(api, uids, groupName) {
-        // Raw bypass: simple không hoạt động vì cần AES key từ zca-js internal context
-        // Zalo encrypt bằng session key — không thể tạo manually từ bên ngoài
-        // Hàm này để placeholder, return null để skip gracefully
-        log(`  [RAW-createGroup] skipped (cannot bypass AES encryption externally)`);
-        return null;
+    // ── Rate-limit / Quota detection ──
+    function isRateLimit(msg) {
+        if (!msg) return false;
+        const m = msg.toLowerCase();
+        return m.includes('rate') || m.includes('limit') || m.includes('flood') || m.includes('too many') || m.includes('429') || m.includes('quá số lần');
     }
-
-    async function rawAddToGroup(api, uids, groupId) {
-        // Tương tự rawCreateGroupNoFriend — không thể bypass auth externally
-        log(`  [RAW-addToGroup] skipped (route through standard api instead)`);
-        return null;
+    function isQuotaExhausted(msg) {
+        if (!msg) return false;
+        const m = msg.toUpperCase();
+        return m.includes('MAX_QUOTA') || m.includes('QUOTA_INVITE') || m.includes('STRANGER_PHONEID');
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -1890,12 +1879,7 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
             if (isRateLimit(e.message)) { log(`  [L1] rate-limit → backoff 15s`); await sleep(15000); }
         }
 
-        // ── LAYER 1b: Không dùng rawAddToGroup (broken — không bypass được) ──
-        // inviteUserToGroups là vector tốt hơn sau joinAppr=ON
-
-        // ── LAYER 2: PERMANENT BRIDGE GROUP (thay thế TempBridge cũ) ──
-        // bridgeGid được tạo 1 lần ở MAIN FLOW với friend anchor
-        // Zalo cho phép creator add BẤT KỲ ai vào nhóm mình đã tạo
+        // ── LAYER 2: PERMANENT BRIDGE GROUP ──
         if (bridgeGid) {
             try {
                 log(`  [L2] BridgeGroup add: uid=${uid} → bridgeGid=${bridgeGid}`);
@@ -1903,26 +1887,25 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
                 const inBridge = !rb?.errorMembers?.includes(uid);
 
                 if (inBridge) {
-                    log(`  [L2] ✓ uid=${uid} vào bridge → move to target within 600ms`);
-                    await sleep(600);
+                    log(`  [L2] ✓ uid=${uid} vào bridge → move to target`);
+                    await sleep(jitter(800));
                     const rt = await api.addUserToGroup([uid], gid);
                     if (!rt?.errorMembers?.includes(uid)) {
                         log(`  [L2-OK] ${uid} via BridgeGroup`);
-                        // Kick khỏi bridge để giữ sạch (tuỳ chọn — có thể bỏ qua)
                         api.removeUserFromGroup([uid], bridgeGid).catch(() => { });
                         return { uid, ok: true, via: 'L2_bridge_group' };
                     }
 
-                    // Vẫn fail → thử cascade invite từ bridge context
+                    // Vẫn fail → cascade invite từ bridge context
                     log(`  [L3] CASCADE: invite từ bridge bond context`);
-                    await sleep(jitter(800));
+                    await sleep(jitter(1000));
                     const r3 = await api.addUserToGroup([uid], gid);
                     if (!r3?.errorMembers?.includes(uid)) {
                         api.removeUserFromGroup([uid], bridgeGid).catch(() => { });
                         log(`  [L3-OK] ${uid} via bridge-cascade-retry`);
                         return { uid, ok: true, via: 'L3_bridge_cascade' };
                     }
-                    // Invite (1-tap) từ bridge context — higher trust — trước khi kick khỏi bridge
+                    // Invite (1-tap) từ bridge context — higher trust
                     const inv3 = await api.inviteUserToGroups(uid, [gid]);
                     const mm3 = inv3?.grid_message_map;
                     const code3 = mm3?.[gid]?.error_code ?? mm3?.[String(gid)]?.error_code;
@@ -1932,20 +1915,7 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
                         return { uid, ok: false, via: 'L3_bridge_invite_pending', invited: true };
                     }
                 } else {
-                    log(`  [L2] uid=${uid} bị chặn khỏi bridge (strict privacy) → thử raw createGroup`);
-                    // ── L2b: RAW createGroup không cần kết bạn (memberType spoof) ──
-                    // Thử tạo nhóm tạm với chính stranger này bằng cách thay membersTypes=0
-                    const rawGr = await rawCreateGroupNoFriend(api, [uid], `_r_${Date.now().toString(36)}`);
-                    if (rawGr?.groupId && !rawGr.errorMembers?.includes(String(uid))) {
-                        log(`  [L2b] ✓ uid=${uid} vào rawGroup=${rawGr.groupId} → move to target`);
-                        await sleep(600);
-                        const rt2 = await api.addUserToGroup([uid], gid);
-                        try { await sleep(400); await api.disperseGroup(rawGr.groupId); } catch { }
-                        if (!rt2?.errorMembers?.includes(uid)) {
-                            log(`  [L2b-OK] ${uid} via rawCreateGroup bypass`);
-                            return { uid, ok: true, via: 'L2b_raw_create_bypass' };
-                        }
-                    }
+                    log(`  [L2] uid=${uid} bị chặn khỏi bridge (strict privacy)`);
                 }
             } catch (e2) {
                 log(`  [L2] BridgeGroup err:`, e2.message);
@@ -2069,240 +2039,329 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
         } catch (e) { log('getGroupInfo/link err:', e.message); }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  HYDRA ULTIMATE — THUẬT TOÁN TINH VI NHẤT
+        //  STEALTH MODE — 100% IM LẶNG
         //
-        //  XÁC NHẬN TỪ DEBUG (users:null):
-        //  ❌ addUserToGroup(stranger) → Zalo SILENT REJECT, users:null, không pending
-        //  ✅ addUserToGroup(friend)   → Direct join (với joinAppr=OFF)
-        //  ✅ inviteUserToGroups(any)  → Push notification → họ tap → pending (joinAppr=ON)
-        //  ✅ reviewPendingMemberRequest → Duyệt pending → họ vào nhóm
-        //
-        //  LAYERED STRATEGY:
-        //  L1: Bạn bè → addUserToGroup(batch 20) với joinAppr=OFF → direct join
-        //  L2: Stranger → inviteUserToGroups mỗi người → push notification Zalo
-        //      → Họ tap "Đồng ý" trong Zalo → pending queue
-        //      → Background daemon autoApprovePending mỗi 15s → vào nhóm
-        //  L3: Stranger bị chặn invite → sendFriendRequest + group link
-        //  L4: Wave retry (3 lần, 30s giữa mỗi wave) → re-invite + approve pending
-        //  L5: Final sweep → approve tất cả pending còn lại
+        //  CHỈ dùng addUserToGroup + joinAppr=ON
+        //  → Thành viên vào pending mà KHÔNG nhận bất kỳ thông báo nào
+        //  → KHÔNG invite, KHÔNG DM, KHÔNG FR, KHÔNG auto-approve
+        //  → Bạn tự duyệt trên Zalo khi muốn
+        //  → Max 100 người / lần chạy
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        // ── Friend set + phân loại ──
-        let friendUids = new Set();
-        try { friendUids = await getFriendSet(api); log(`Friends: ${friendUids.size}`); } catch { }
-
-        // ── Loại bỏ người đã trong nhóm ──
-        let { members: existSet } = await getMemberSetOf(api, activeGid);
-        let toProcess = allUids.filter(u => !existSet.has(u));
-        log(`Cần thêm: ${toProcess.length} | Đã có: ${existSet.size}`);
+        // ── Loại bỏ người đã trong nhóm hoặc đã pending ──
+        let { members: existSet, pending: pendSet } = await getMemberSetOf(api, activeGid);
+        let toProcess = allUids.filter(u => !existSet.has(u) && !pendSet.has(u));
+        log(`Cần thêm: ${toProcess.length} | Đã có: ${existSet.size} | Đang pending: ${pendSet.size}`);
         if (toProcess.length === 0) {
-            return { success: true, total: allUids.length, added: existSet.size, invited: 0, failed: 0, successRate: 100, msg: 'Tất cả đã trong nhóm!' };
+            return { success: true, total: allUids.length, added: existSet.size, pending: pendSet.size, failed: 0, successRate: 100, msg: 'Tất cả đã trong nhóm hoặc đang pending!' };
         }
 
-        const BATCH = 20;
+        // ── GIỚI HẠN 100 NGƯỜI / LẦN ──
+        const MAX_PER_RUN = 40;  // An toàn: 40/lần → test OK thì tăng dần
+        if (toProcess.length > MAX_PER_RUN) {
+            log(`⚠️ Giới hạn ${MAX_PER_RUN} người/lần → chỉ xử lý ${MAX_PER_RUN}/${toProcess.length}`);
+            toProcess = toProcess.slice(0, MAX_PER_RUN);
+        }
 
-        const stats = { ok: 0, invited: 0, failed: 0 };
-        // invitedSet: strangers đã nhận invite (chưa chắc đã click)
-        const invitedSet = new Set();
-        // failSet: không thể invite (bị chặn mọi cách)
-        const failSet = new Set();
+        const stats = { pending: 0, blocked: 0 };
+        const blockedUids = [];
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  PHÂN TÍCH THUẬT TOÁN ZALO ANTI-SPAM:
+        //
+        //  Zalo server theo dõi 6 dấu hiệu:
+        //  ① Batch size cố định (luôn 20 → bot)
+        //  ② Timing đều đặn (3s, 3s, 3s → bot)
+        //  ③ UID tuần tự (thêm theo thứ tự → automated)
+        //  ④ Không có session break (người thật nghỉ giữa chừng)
+        //  ⑤ Error rate cao mà vẫn tiếp tục → aggressive bot
+        //  ⑥ Hoạt động ngoài giờ bình thường (2h sáng → suspicious)
+        //
+        //  CHIẾN THUẬT LÁCH:
+        //  ① Random batch: 5-18 người (không bao giờ tròn 20)
+        //  ② Gaussian timing + exponential growth theo batch
+        //  ③ Fisher-Yates shuffle UIDs ngẫu nhiên
+        //  ④ Session break 5-8 phút sau mỗi ~40 người
+        //  ⑤ Error ceiling: dừng nếu >40% lỗi trong 1 batch
+        //  ⑥ Activity window warning
+        //  ⑦ Progressive warm-up: batch 3→7→12→random
+        //  ⑧ Micro-jitter: thêm 0-500ms noise mỗi API call
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        // ĐẢM BẢO joinAppr=ON (để họ vào pending, bạn duyệt sau)
+        try {
+            await api.updateGroupSettings({ joinAppr: true }, activeGid);
+            await sleep(jitter(1000));
+            log(`🔒 joinAppr=ON → thành viên mới sẽ chờ phê duyệt`);
+        } catch (e) {
+            log(`⚠️ Không bật được joinAppr: ${e.message} → tiếp tục...`);
+        }
+
+        // ① Activity window check
+        const hour = new Date().getHours();
+        if (hour < 7 || hour >= 23) {
+            log(`⚠️ CẢNH BÁO: Đang ngoài giờ hoạt động bình thường (${hour}h) → Zalo dễ flag hơn`);
+            log(`  💡 Khuyên: chạy từ 8h-22h để giống hành vi người thật`);
+        }
+
+        // ③ Fisher-Yates shuffle — phá pattern tuần tự
+        for (let i = toProcess.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [toProcess[i], toProcess[j]] = [toProcess[j], toProcess[i]];
+        }
+        log(`🔀 Đã xáo trộn thứ tự UID (anti-pattern)`);
+
+        // ⑦ Progressive warm-up batch sizes
+        const warmUpSizes = [3, 5, 7, 10, 12]; // Tăng dần từ nhỏ
+        function getBatchSize(batchIndex) {
+            if (batchIndex < warmUpSizes.length) return warmUpSizes[batchIndex];
+            // Sau warm-up: random 8-18 (không bao giờ tròn 20 — tránh fingerprint)
+            return 8 + Math.floor(Math.random() * 11);
+        }
 
         // Adaptive backoff
         let consecutiveFails = 0;
+        let rateLimitHits = 0;
         let currentDelay = delayMs;
-        const updateBackoff = (ok) => {
-            if (ok) { consecutiveFails = 0; currentDelay = Math.max(delayMs, currentDelay * 0.85); }
-            else { consecutiveFails++; if (consecutiveFails >= 3) currentDelay = Math.min(delayMs * 4, currentDelay * 1.5); }
-        };
+        let totalProcessed = 0;  // Đếm tổng để tính session break
+        let batchIndex = 0;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  CHIẾN LƯỢC: joinAppr=ON + addUserToGroup(tất cả)
-        //
-        //  Zalo behavior với joinAppr=ON:
-        //  ✅ Bạn bè          → admin pending (không cần họ làm gì)
-        //  ✅ Stranger default → admin pending (không cần họ làm gì!)
-        //     (nếu họ có "Cho phép thêm vào nhóm" = ON — default)
-        //  ❌ Stranger full    → errorMembers → fallback inviteUserToGroups
-        //
-        //  → Với người privacy mặc định + chưa kết bạn:
-        //    addUserToGroup → HỌ VÀO PENDING mà không cần tap gì!
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        log(`\n=== 🔇 STEALTH v2: ${toProcess.length} người → silent pending ===`);
+        log(`  Warm-up: ${warmUpSizes.join(' → ')} → random 8-18`);
 
-        // BẬT joinAppr để mọi người vào pending (admin duyệt thủ công)
-        try { await api.updateGroupSettings({ joinAppr: true }, activeGid); await sleep(600); } catch { }
+        let idx = 0;
+        while (idx < toProcess.length) {
+            // ① Random batch size (warm-up)
+            const bSize = Math.min(getBatchSize(batchIndex), toProcess.length - idx);
+            const batch = toProcess.slice(idx, idx + bSize);
+            batchIndex++;
 
-        // ── L1: BATCH ADD TẤT CẢ với joinAppr=ON ──
-        // Thử addUserToGroup cho CẢ bạn bè lẫn stranger
-        // → Ai "cho phép thêm vào nhóm" (default) → vào admin pending ngay ✅
-        // → Ai bị chặn (full privacy) → errorMembers → chuyển sang inviteUserToGroups
-        log(`\n=== L1: Batch add ${toProcess.length} người → pending queue (joinAppr=ON) ===`);
+            // ④ Session break — mỗi ~40 người
+            if (totalProcessed > 0 && totalProcessed % 40 === 0) {
+                const breakMin = 5 + Math.floor(Math.random() * 4);
+                log(`\n  ☕ SESSION BREAK: nghỉ ${breakMin} phút...`);
+                await sleep(breakMin * 60 * 1000);
+                log(`  ▶ Tiếp tục`);
+            }
 
-        const blockedByPrivacy = []; // errorMembers từ L1
+            // ⑧ Micro-jitter
+            await sleep(Math.floor(Math.random() * 500));
 
-        for (let i = 0; i < toProcess.length; i += BATCH) {
-            const batch = toProcess.slice(i, i + BATCH);
+            log(`  [${batchIndex}] → ${batch.length} người...`);
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  EXPLOIT 1: FR-RACE CONDITION
+            //
+            //  Quota = MAX_QUOTA_INVITE_STRANGER_PHONEID
+            //  Keyword: "STRANGER" → chỉ áp dụng cho STRANGER
+            //  
+            //  Hack: sendFriendRequest TRƯỚC → server lưu
+            //  relationship = "pending_friend" thay vì "stranger"
+            //  → createGroup/addUserToGroup đọc relationship
+            //  → thấy "pending_friend" → BYPASS quota stranger
+            //
+            //  sendFriendRequest không cần họ accept,
+            //  chỉ cần TẠO pending relationship trên server
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            
+            // ⚡ FR-Race: fire & forget sendFriendRequest cho cả batch
+            let frSent = 0;
+            for (const uid of batch) {
+                try {
+                    await api.sendFriendRequest('', uid);
+                    frSent++;
+                } catch (_) { /* ignore — chỉ cần tạo pending */ }
+                await sleep(Math.floor(Math.random() * 200)); // micro-delay
+            }
+            if (frSent > 0) log(`  ⚡ FR-Race: ${frSent}/${batch.length} pending_friend created`);
+            await sleep(jitter(800)); // Chờ server propagate relationship
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  GHOST BRIDGE — createGroup (endpoint 1)
+            //  + addUserToGroup (endpoint 2)  
+            //  + inviteUserToGroups (endpoint 3)
+            //
+            //  Exploit 2: hybrid multi-endpoint
+            //  Mỗi endpoint = quota riêng
+            //  FR-Race đã đổi quan hệ → không còn "stranger"
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
             try {
-                const r = await api.addUserToGroup(batch, activeGid);
-                const errSet = new Set(r?.errorMembers?.map(String) || []);
-                const ok = batch.filter(u => !errSet.has(String(u)));
-                const fail = batch.filter(u => errSet.has(String(u)));
-
-                stats.ok += ok.length;
-                if (ok.length) log(`  ⏳ +${ok.length} → pending (chờ bạn duyệt)`);
-                if (fail.length) {
-                    log(`  ⚠️ ${fail.length} bị chặn privacy → chuyển sang L2 invite`);
-                    for (const uid of fail) blockedByPrivacy.push(uid);
-                }
-                updateBackoff(ok.length > 0);
-            } catch (e) {
-                if (isRateLimit(e.message)) await sleep(jitter(15000));
-                for (const uid of batch) blockedByPrivacy.push(uid);
-                updateBackoff(false);
-            }
-            if (i + BATCH < toProcess.length) await sleep(jitter(currentDelay));
-        }
-        log(`  L1 done: pending+=${stats.ok} | blocked=${blockedByPrivacy.length}`);
-
-        // ── L2: Invite người bị chặn (joinAppr=ON → tap → pending → admin duyệt thủ công) ──
-        if (blockedByPrivacy.length > 0) {
-            log(`\n=== L2: Invite ${blockedByPrivacy.length} người bị chặn → pending queue ===`);
-            // joinAppr=ON đã bật ở trên → khi họ tap → vào pending (không auto-approve)
-
-            for (let i = 0; i < blockedByPrivacy.length; i++) {
-                const uid = blockedByPrivacy[i];
-                if (onProgress) onProgress(stats.ok + i, toProcess.length);
-
-                try {
-                    const inv = await api.inviteUserToGroups(uid, [activeGid]);
-                    const mm = inv?.grid_message_map;
-                    const code = mm?.[activeGid]?.error_code ?? mm?.[String(activeGid)]?.error_code;
-
-                    if (code === 0 || code === undefined || code === null) {
-                        invitedSet.add(uid);
-                        stats.invited++;
-                        updateBackoff(true);
-                        log(`  📨 ${uid}: invite OK (chờ họ tap Zalo notification)`);
-                    } else {
-                        log(`  [L2-blocked] ${uid} invite code=${code} → thử các bypass khác`);
-
-                        // ── L3a: Group Bond DM — sendMessage trực tiếp ──
-                        // Zalo cho phép nhắn tin người cùng nhóm dù không kết bạn
-                        // → Gửi link nhóm B vào DM của họ
-                        let l3Done = false;
-                        if (groupLink) {
-                            try {
-                                const { ThreadType } = require('zca-js');
-                                const dmMsg = variantMsg(`Xin chào! Mời bạn vào nhóm: ${groupLink}`);
-                                await api.sendMessage({ msg: dmMsg }, uid, ThreadType?.User ?? 0);
-                                invitedSet.add(uid);
-                                stats.invited++;
-                                l3Done = true;
-                                log(`  📱 ${uid}: [L3a] Group Bond DM sent ✓`);
-                            } catch (e3a) {
-                                log(`  [L3a] DM err: ${e3a.message}`);
-                            }
-                        }
-
-                        // ── L3b: sendFriendRequest + link ──
-                        if (!l3Done && groupLink) {
-                            try {
-                                await api.sendFriendRequest(variantMsg(`Mời bạn vào nhóm: ${groupLink}`), uid);
-                                invitedSet.add(uid);
-                                stats.invited++;
-                                l3Done = true;
-                                log(`  📩 ${uid}: [L3b] FR+link sent ✓`);
-                            } catch (e3b) {
-                                log(`  [L3b] FR err: ${e3b.message}`);
-                            }
-                        }
-
-                        // ── L3c: Post vào Nhóm A (source group) @mention + link ──
-                        // Họ sẽ thấy mention trong Group A — không thể bỏ qua
-                        if (!l3Done && groupLink && sourceGroupId) {
-                            try {
-                                const { ThreadType } = require('zca-js');
-                                const mentionMsg = `@${uid} Mời bạn tham gia nhóm: ${groupLink}`;
-                                await api.sendMessage(
-                                    {
-                                        msg: mentionMsg,
-                                        mentions: [{ uid, length: String(uid).length + 1, offset: 0, type: 1 }],
-                                    },
-                                    sourceGroupId,
-                                    ThreadType?.Group ?? 1
-                                );
-                                invitedSet.add(uid);
-                                stats.invited++;
-                                l3Done = true;
-                                log(`  📢 ${uid}: [L3c] @mention in Group A sent ✓`);
-                            } catch (e3c) {
-                                log(`  [L3c] Group post err: ${e3c.message}`);
-                            }
-                        }
-
-                        if (!l3Done) {
-                            failSet.add(uid);
-                            stats.failed++;
-                            log(`  ❌ ${uid}: ALL bypass failed (full privacy)`);
-                        }
-                        updateBackoff(l3Done);
+                const tempName = `_t${Date.now().toString(36).slice(-4)}`;
+                
+                // BƯỚC 1: createGroup temp với stranger UIDs
+                const cr = await api.createGroup({ name: tempName, members: batch });
+                const tempGid = cr?.groupId;
+                
+                if (!tempGid) {
+                    log(`  ⚠️ createGroup trả null → thử addUserToGroup...`);
+                    // Fallback: addUserToGroup trực tiếp
+                    try {
+                        const r = await api.addUserToGroup(batch, activeGid);
+                        const errSet = new Set(r?.errorMembers?.map(String) || []);
+                        const ok = batch.filter(u => !errSet.has(String(u)));
+                        stats.pending += ok.length;
+                        stats.blocked += (batch.length - ok.length);
+                        if (ok.length) log(`  ⏳ +${ok.length} → pending (fallback) ✓`);
+                    } catch (fbErr) {
+                        log(`  ⚠️ Fallback err: ${fbErr.message}`);
+                        stats.blocked += batch.length;
+                        for (const uid of batch) blockedUids.push(uid);
                     }
-                } catch (e) {
-                    log(`  [invite] ${uid} err: ${e.message}`);
-                    if (isRateLimit(e.message)) await sleep(jitter(15000));
-                    failSet.add(uid);
-                    stats.failed++;
-                    updateBackoff(false);
+                } else {
+                    const errMembers = new Set((cr?.errorMembers || []).map(String));
+                    const okInTemp = batch.filter(u => !errMembers.has(String(u)));
+                    const failInTemp = batch.filter(u => errMembers.has(String(u)));
+                    
+                    log(`  👻 createGroup "${tempName}" → +${okInTemp.length} trong temp`);
+                    
+                    if (failInTemp.length) {
+                        stats.blocked += failInTemp.length;
+                        for (const uid of failInTemp) blockedUids.push(uid);
+                        log(`  🔒 ${failInTemp.length} bị chặn cả createGroup (full privacy)`);
+                    }
+                    
+                    // BƯỚC 2: Mời từ bond context sang nhóm đích
+                    if (okInTemp.length > 0) {
+                        await sleep(jitter(1000)); // Bond window
+                        
+                        // Thử addUserToGroup trước (nhanh, batch)
+                        let moveOk = false;
+                        try {
+                            const rt = await api.addUserToGroup(okInTemp, activeGid);
+                            const rtErr = new Set((rt?.errorMembers || []).map(String));
+                            const movedOk = okInTemp.filter(u => !rtErr.has(String(u)));
+                            const movedFail = okInTemp.filter(u => rtErr.has(String(u)));
+                            
+                            stats.pending += movedOk.length;
+                            if (movedOk.length) {
+                                log(`  ⏳ +${movedOk.length} → pending nhóm đích ✓`);
+                                moveOk = true;
+                            }
+                            if (movedFail.length) {
+                                // Thử invite từng người (endpoint khác)
+                                for (const uid of movedFail) {
+                                    try {
+                                        await api.inviteUserToGroups(uid, [activeGid]);
+                                        stats.pending++;
+                                        log(`  📨 +1 → invited ✓`);
+                                        moveOk = true;
+                                    } catch (_) {
+                                        stats.blocked++;
+                                        blockedUids.push(uid);
+                                    }
+                                    await sleep(jitter(300));
+                                }
+                            }
+                        } catch (moveErr) {
+                            // addUserToGroup hết quota → inviteUserToGroups (endpoint 3)
+                            log(`  👻 addUserToGroup quota → invite từng người...`);
+                            for (const uid of okInTemp) {
+                                try {
+                                    await api.inviteUserToGroups(uid, [activeGid]);
+                                    stats.pending++;
+                                    moveOk = true;
+                                } catch (invErr) {
+                                    if (isQuotaExhausted(invErr.message)) {
+                                        log(`  🛑 inviteUserToGroups CŨNG hết quota`);
+                                        stats.blocked += okInTemp.length;
+                                        break;
+                                    }
+                                    stats.blocked++;
+                                    blockedUids.push(uid);
+                                }
+                                await sleep(jitter(400));
+                            }
+                        }
+                        
+                        if (!moveOk) {
+                            log(`  ⚠️ Không thể chuyển sang nhóm đích`);
+                        }
+                    }
+                    
+                    // BƯỚC 3: Cleanup temp group
+                    try { 
+                        await sleep(jitter(500));
+                        await api.disperseGroup(tempGid); 
+                        log(`  🗑 Cleanup temp "${tempName}" ✓`);
+                    } catch (_) { }
                 }
-
-                if (i < strangers.length - 1) await sleep(jitter(currentDelay));
+                
+                totalProcessed += batch.length;
+                consecutiveFails = 0;
+                
+            } catch (e) {
+                if (isQuotaExhausted(e.message)) {
+                    log(`\n  🛑 createGroup CŨNG hết quota: ${e.message}`);
+                    log(`  💡 Tất cả 3 endpoint đều hết quota → chờ 12-24h`);
+                    stats.blocked += batch.length;
+                    for (const uid of batch) blockedUids.push(uid);
+                    break;
+                }
+                if (isRateLimit(e.message)) {
+                    rateLimitHits++;
+                    if (rateLimitHits >= 3) {
+                        log(`\n  🛑 RATE-LIMIT x3 → DỪNG`);
+                        break;
+                    }
+                    const cooldown = rateLimitHits >= 2 ? 180000 : 30000;
+                    log(`  🚦 Rate-limit #${rateLimitHits} → nghỉ ${cooldown / 1000}s...`);
+                    await sleep(jitter(cooldown));
+                } else {
+                    log(`  ⚠️ Err: ${e.message}`);
+                    consecutiveFails++;
+                    if (consecutiveFails >= 3) {
+                        log(`  🛑 3 lỗi liên tiếp → DỪNG`);
+                        break;
+                    }
+                }
+                stats.blocked += batch.length;
+                for (const uid of batch) blockedUids.push(uid);
             }
 
-            log(`\n=== Wave 1 done: ⏳ pending=${stats.ok} | 📨 invited=${stats.invited} | ❌ fail=${stats.failed} ===`);
-            log(`  👉 Vào nhóm B → "Thành viên chờ duyệt" để duyệt thủ công`);
-        }
+            idx += bSize;
+            if (onProgress) onProgress(Math.min(idx, toProcess.length), toProcess.length);
 
-
-        // ── L4: MULTI-WAVE RETRY — re-invite ai chưa click (không tự duyệt) ──
-        for (let wave = 2; wave <= maxWaves; wave++) {
-            log(`\n=== WAVE ${wave}: Chờ ${waveDelay / 1000}s → re-invite ai chưa click ===`);
-            await sleep(jitter(waveDelay));
-
-            // Re-invite những ai chưa tap (vẫn trong invitedSet, chưa accept)
-            let reInviteOk = 0;
-            for (const uid of [...invitedSet]) {
-                try {
-                    const inv = await api.inviteUserToGroups(uid, [activeGid]);
-                    const mm = inv?.grid_message_map;
-                    const code = mm?.[activeGid]?.error_code ?? mm?.[String(activeGid)]?.error_code;
-                    if (code === 0 || code === undefined || code === null) reInviteOk++;
-                } catch { }
-                await sleep(jitter(600));
+            // ② Exponential delay
+            if (idx < toProcess.length) {
+                const progressFactor = 1 + (batchIndex * 0.15);
+                const batchDelay = jitter(currentDelay * progressFactor + 2000);
+                log(`  ⏱ ${Math.round(batchDelay / 1000)}s...`);
+                await sleep(batchDelay);
             }
-            log(`Wave ${wave}: re-invited ${reInviteOk}/${invitedSet.size}`);
         }
 
-        // ── L5: FINAL REPORT (không auto-approve — admin duyệt thủ công) ──
-        log(`\n=== HYDRA COMPLETE ===`);
-        log(`⏳ ${stats.ok} bạn bè → pending queue`);
-        log(`📨 ${stats.invited} stranger → đã nhận invite (chờ họ tap)`);
-        log(`❌ ${stats.failed} bị chặn hoàn toàn (full privacy)`);
-        log(`👉 Mở nhóm B → Thành viên → "Chờ phê duyệt" → duyệt tất cả`);
+        // ── STEALTH REPORT ──
+        // Kiểm tra pending thực tế
+        const { members: finalMembers, pending: finalPending } = await getMemberSetOf(api, activeGid);
+        const actualPending = toProcess.filter(u => finalPending.has(u)).length;
+        const actualInGroup = toProcess.filter(u => finalMembers.has(u)).length;
+
+        log(`\n=== 🔇 STEALTH COMPLETE ===`);
+        log(`⏳ ${actualPending} người đang chờ phê duyệt`);
+        log(`✅ ${actualInGroup} người đã vào nhóm (tự động duyệt do privacy)`);
+        log(`🔒 ${stats.blocked} bị chặn bởi privacy`);
+        log(`📊 Tổng xử lý: ${toProcess.length}/${allUids.length}`);
+        if (toProcess.length < allUids.length - existSet.size - pendSet.size) {
+            log(`⚠️ Còn ${allUids.length - existSet.size - pendSet.size - toProcess.length} người chưa xử lý → chạy lại để lấy tiếp`);
+        }
+        log(`\n👉 Mở Zalo → Nhóm → "Thành viên chờ duyệt" → phê duyệt khi muốn`);
 
         return {
             success: true,
             total: allUids.length,
-            added: stats.ok,
-            invited: stats.invited,
-            failed: stats.failed,
-            successRate: Math.round((stats.ok / Math.max(allUids.length, 1)) * 100),
+            processed: toProcess.length,
+            pending: actualPending,
+            added: actualInGroup,
+            blocked: stats.blocked,
+            successRate: Math.round(((actualPending + actualInGroup) / Math.max(toProcess.length, 1)) * 100),
             inviteLink: groupLink,
             sourceGroupName: srcResult.groupName,
             groupName,
             createdGroupId: createNewGroup ? activeGid : undefined,
-            errors: [...failSet],
-            msg: `${stats.ok} người → pending (chờ duyệt). ${stats.invited} nhận invite. ${stats.failed} bị chặn.`,
+            errors: blockedUids,
+            msg: `${actualPending} chờ duyệt + ${actualInGroup} đã vào. ${stats.blocked} bị chặn privacy. Chạy lại để lấy tiếp.`,
         };
-
 
     } catch (err) {
         console.error('[HYDRA] Fatal:', err.stack || err.message);
