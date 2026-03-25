@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // ── Electron bridge ──────────────────────────────────────────────
 const el = window.electron || {
@@ -53,6 +53,8 @@ function seedGroups() {
 // ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
+
+
 document.addEventListener('DOMContentLoaded', async () => {
     seedGroups();
 
@@ -82,6 +84,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     navigate('groups');
 
     log('info', '🚀 Zalo Tool Pro đã khởi động. Đăng nhập để bắt đầu!', 'send');
+    // Auto-save sau khi đã load state xong
+    setInterval(saveState, 30000);
 });
 
 // ══════════════════════════════════════════════════════════════════
@@ -100,6 +104,10 @@ window.navigate = function (page) {
     document.querySelectorAll('.page').forEach(p => {
         p.classList.toggle('active', p.id === 'page-' + page);
     });
+    // ── Auto-sync Pipeline khi user navigate sang Pipeline ──
+    if (page === 'pipeline') {
+        setTimeout(() => { if (window.syncPipelineFromSettings) window.syncPipelineFromSettings(); }, 150);
+    }
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -119,13 +127,18 @@ function initGroups() {
         });
     });
 
+    // Nút gửi tin vào tất cả nhóm đã chọn
+    document.getElementById('btnSendAllGroups')?.addEventListener('click', () => {
+        window.sendMsgToAllSelectedGroups();
+    });
+
     document.getElementById('btnRefreshGroups').addEventListener('click', () => {
         if (!S.loggedIn) { toast('Vui lòng đăng nhập Zalo trước!', 'error'); navigate('settings'); return; }
         const btn = document.getElementById('btnRefreshGroups');
         btn.style.transform = 'rotate(360deg)';
         btn.style.transition = 'transform 0.6s';
         setTimeout(() => { btn.style.transform = ''; btn.style.transition = ''; }, 600);
-        toast('Đã làm mới danh sách nhóm!', 'success');
+        loadRealGroups();
     });
 
     document.getElementById('btnLoginGroup').addEventListener('click', () => navigate('settings'));
@@ -170,14 +183,19 @@ function renderGroups(query = '') {
         </div>
         ${g.unread > 0 ? `<div class="gc-unread">🔔 ${g.unread} tin mới</div>` : ''}
       </div>
-      <button data-gid="${g.id}" onclick="sendToGroupMembers(this.dataset.gid)"
-        style="margin-top:8px;width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer">
-        📤 Gửi tin thành viên (${g.members})
-      </button>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button data-gid="${g.id}" onclick="sendToGroupMembers(this.dataset.gid)"
+          style="flex:1;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;padding:8px 0;font-size:12px;font-weight:600;cursor:pointer">
+          📤 DM thành viên (${g.members})
+        </button>
+        <button onclick="sendMsgToGroupChat('${g.id}')" title="Gửi tin vào khung chat nhóm"
+          style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer">
+          💬
+        </button>
+      </div>
     </div>
   `).join('') || '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted)">Không tìm thấy nhóm nào</div>';
 }
-
 
 window.toggleGroupSelect = function (id, el) {
     if (S.selectedGroups.has(id)) {
@@ -203,7 +221,7 @@ window.sendToGroupMembers = async function (groupId) {
     const msg = prompt('Gửi tin đến "' + groupName + '"\nNhập nội dung:');
     if (!msg || !msg.trim()) return;
 
-    const cookie = S.cookie || 'QR_SESSION';
+    const cookie = S.cookie;
     log('info', `📤 Đang lấy thành viên nhóm "${groupName}"...`, 'send');
     navigate('bulk-send');
 
@@ -285,23 +303,48 @@ function updateSelectedGroupCount() {
     document.getElementById('selectedGroupCount').textContent = `${S.selectedGroups.size} nhóm đã chọn`;
 }
 
-function confirmGroupsSelected() {
+async function confirmGroupsSelected() {
     if (S.selectedGroups.size === 0) { toast('Chọn ít nhất 1 nhóm!', 'warning'); return; }
-    // Inject member phones into phone input
-    const dummyPhones = [];
-    for (const id of S.selectedGroups) {
-        const g = S.groups.find(x => x.id === id);
-        if (g) {
-            for (let i = 0; i < Math.min(g.members, 5); i++) {
-                dummyPhones.push('09' + String(Math.floor(10000000 + Math.random() * 90000000)));
-            }
-        }
-    }
-    document.getElementById('phoneInput').value = dummyPhones.join('\n');
-    updatePhoneCount();
+
     closeModal('groupSelectModal');
     navigate('bulk-send');
-    toast(`Đã thêm thành viên từ ${S.selectedGroups.size} nhóm vào danh sách gửi tin!`, 'success');
+
+    // Fetch real members from selected groups via API
+    const cookie = S.cookie;
+    const allUids = [];
+    let totalFetched = 0;
+
+    toast(`⏳ Đang lấy thành viên từ ${S.selectedGroups.size} nhóm...`, 'info');
+
+    for (const groupId of S.selectedGroups) {
+        const g = S.groups.find(x => x.id === groupId);
+        const groupName = g ? g.name : groupId;
+        try {
+            const res = await el.zalo.getGroupMembers(cookie, groupId);
+            if (res.success && res.members?.length) {
+                for (const m of res.members) {
+                    if (m.uid && !allUids.includes(m.uid)) {
+                        allUids.push(m.uid);
+                    }
+                }
+                totalFetched += res.members.length;
+                log('info', `✅ Nhóm "${groupName}": ${res.members.length} thành viên`, 'send');
+            } else {
+                log('warning', `⚠️ Nhóm "${groupName}": ${res.error || 'không có thành viên'}`, 'send');
+            }
+        } catch (e) {
+            log('error', `❌ Nhóm "${groupName}": ${e.message}`, 'send');
+        }
+    }
+
+    if (allUids.length > 0) {
+        // Inject UIDs as uid:xxx format so sendBulkSmart can parse them
+        document.getElementById('phoneInput').value = allUids.map(uid => `uid:${uid}`).join('\n');
+        updatePhoneCount();
+        toast(`✅ Đã lấy ${allUids.length} thành viên từ ${S.selectedGroups.size} nhóm!`, 'success');
+    } else {
+        toast('⚠️ Không lấy được thành viên nào — hãy đăng nhập QR trước', 'warning');
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -409,6 +452,142 @@ function initBulkSend() {
     document.getElementById('btnSend').addEventListener('click', startBulkSend);
     document.getElementById('btnPauseSend').addEventListener('click', pauseBulkSend);
     document.getElementById('btnStopSend').addEventListener('click', stopBulkSend);
+
+    // ── Group Invite Toggle ──
+    const enableGroupInviteCb = document.getElementById('enableGroupInvite');
+    const inviteGroupSelector = document.getElementById('inviteGroupSelector');
+    if (enableGroupInviteCb) {
+        enableGroupInviteCb.addEventListener('change', () => {
+            inviteGroupSelector.style.display = enableGroupInviteCb.checked ? '' : 'none';
+            if (enableGroupInviteCb.checked) populateInviteGroupSelect();
+        });
+    }
+
+    // ── Listen for smart send progress events ──
+    if (el.onBulkSmartProgress) {
+        el.onBulkSmartProgress((data) => {
+            if (data.phase === 'resolve') {
+                log('info', `🔍 ${data.status}`, 'send');
+                if (data.failed) log('warning', `⚠️ ${data.status}`, 'send');
+                updateSendProgress(data.pct, 100);
+            } else if (data.phase === 'sending') {
+                const icon = data.ok ? '✅' : '❌';
+                const displayName = data.name || data.uid || 'unknown';
+                const viaTag = data.via ? ` [${data.via}]` : '';
+                log(data.ok ? 'success' : 'error', `${icon} ${displayName}${viaTag}${data.error ? ': ' + data.error : ''}`, 'send');
+                if (data.results) {
+                    S.send.ok = data.results.sent || 0;
+                    S.send.err = data.results.failed || 0;
+                    S.send.wait = (data.total || 0) - ((data.index || 0) + 1);
+                    updateSendStats();
+                }
+                updateSendProgress((data.index || 0) + 1, data.total || 0);
+            } else if (data.phase === 'cooldown') {
+                log('info', `☕ ${data.status}`, 'send');
+            } else if (data.phase === 'done') {
+                log('success', `🎉 ${data.status}`, 'send');
+                if (data.results) {
+                    const r = data.results;
+                    log('info', `📊 Msg: ${r.msgOk} | Invite: ${r.inviteOk} | Retry: ${r.retriedDMs || 0} | Fail: ${r.failed}`, 'send');
+                    log('info', `👥 Bạn bè: ${r.friendCount || '?'} | Người lạ: ${r.strangerCount || '?'} | Block rate: ${r.strangerBlockRate || 0}%`, 'send');
+                    toast(`Xong! ${r.sent}/${r.total} gửi OK (${r.successRate}%)`, r.failed === 0 ? 'success' : 'warning');
+                }
+                stopBulkSend();
+            }
+        });
+    }
+}
+
+function stopBulkSend() {
+    S.send = { running: false, paused: false, ok: 0, err: 0, wait: 0 };
+    setSendBtns(false);
+    // Gửi cancel signal tới backend
+    try { el.zalo?.cancelBulkSend?.(); } catch (_) {}
+}
+
+async function refreshAccountList() {
+    const container = document.getElementById('accountPoolList');
+    if (!container) return;
+    try {
+        const accounts = await el.zalo.poolGetAll();
+        if (!accounts || accounts.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px;">Chưa có tài khoản. Đăng nhập QR để thêm.</div>';
+            return;
+        }
+        const groupOpts = (S.groups || []).map(g => `<option value="${g.id}">${g.name} (${g.members} TV)</option>`).join('');
+        container.innerHTML = accounts.map((a, i) => `
+            <div style="padding:10px;background:rgba(99,102,241,0.08);border-radius:8px;margin-bottom:6px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:18px;">${i === 0 ? '👑' : '👤'}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-h);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.name}</div>
+                        <div style="font-size:11px;color:var(--text-muted);">UID: ${a.uid} | Quota: ${a.quotaDay}/200</div>
+                    </div>
+                    <button onclick="toggleAccountGroups('${a.uid}')" style="background:rgba(99,102,241,0.15);color:#6366f1;border:none;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">⚙ Nhóm</button>
+                    <button onclick="removePoolAccount('${a.uid}')" style="background:rgba(239,68,68,0.1);color:#ef4444;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">✕</button>
+                </div>
+                <div id="accountGroups_${a.uid}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid rgba(99,102,241,0.15);">
+                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+                        <label style="font-size:11px;color:var(--text-muted);min-width:70px;">Nhóm nguồn:</label>
+                        <select id="srcGroup_${a.uid}" onchange="saveAccountGroupMapping('${a.uid}')" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.3);background:var(--bg-card);">
+                            <option value="">-- Không chọn --</option>
+                            ${groupOpts}
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <label style="font-size:11px;color:var(--text-muted);min-width:70px;">Nhóm đích:</label>
+                        <select id="dstGroup_${a.uid}" onchange="saveAccountGroupMapping('${a.uid}')" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.3);background:var(--bg-card);">
+                            <option value="">-- Dùng chung --</option>
+                            ${groupOpts}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Restore saved selections
+        for (const a of accounts) {
+            if (a.sourceGroupId) {
+                const sel = document.getElementById(`srcGroup_${a.uid}`);
+                if (sel) sel.value = a.sourceGroupId;
+            }
+            if (a.destGroupIds && a.destGroupIds[0]) {
+                const sel = document.getElementById(`dstGroup_${a.uid}`);
+                if (sel) sel.value = a.destGroupIds[0];
+            }
+        }
+    } catch (_) {}
+}
+
+// Global function cho onclick
+window.removePoolAccount = async function(uid) {
+    await el.zalo.poolRemove(uid);
+    refreshAccountList();
+    toast('Đã xóa tài khoản khỏi pool', 'info');
+};
+
+window.toggleAccountGroups = function(uid) {
+    const panel = document.getElementById(`accountGroups_${uid}`);
+    if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+};
+
+window.saveAccountGroupMapping = async function(uid) {
+    const srcSel = document.getElementById(`srcGroup_${uid}`);
+    const dstSel = document.getElementById(`dstGroup_${uid}`);
+    const sourceGroupId = srcSel?.value || '';
+    const destGroupId = dstSel?.value || '';
+    const destGroupIds = destGroupId ? [destGroupId] : [];
+    await el.zalo.poolSetGroupMapping(uid, sourceGroupId, destGroupIds);
+    toast(`Đã lưu nhóm cho TK`, 'success');
+};
+
+function populateInviteGroupSelect() {
+    const opts = '<option value="">-- Chọn nhóm --</option>' +
+        S.groups.map(g => `<option value="${g.id}">${g.name} (${g.members} TV)</option>`).join('');
+    const sel1 = document.getElementById('inviteGroupSelect');
+    const sel2 = document.getElementById('inviteGroupSelect2');
+    if (sel1) sel1.innerHTML = opts.replace('Chọn nhóm', 'Nhóm 1 (chính)');
+    if (sel2) sel2.innerHTML = opts.replace('Chọn nhóm', 'Nhóm 2 (xoay)');
 }
 
 function updatePhoneCount() {
@@ -421,12 +600,93 @@ function getPhones(id) {
         .split('\n').map(p => p.trim()).filter(p => p.length >= 9 && /\d/.test(p));
 }
 
-function startBulkSend() {
+async function startBulkSend() {
     if (!S.loggedIn) { toast('Vui lòng đăng nhập Zalo trước!', 'error'); navigate('settings'); return; }
-    const msg = document.getElementById('msgInput').value.trim();
-    if (!msg) { toast('Nhập nội dung tin nhắn!', 'warning'); return; }
+    let msg = document.getElementById('msgInput').value.trim();
+    // FIX #3: Nếu msgInput trống → lấy từ Kho tin nhắn (settingsMsgs) và xoay vòng
+    if (!msg) {
+        try {
+            const storedMsgs = (await el.store.get('settingsMsgs')) || [];
+            if (storedMsgs.length > 0) {
+                const idx = Math.floor(Math.random() * storedMsgs.length);
+                msg = storedMsgs[idx];
+                document.getElementById('msgInput').value = msg;
+                toast(`📋 Đã lấy tin nhắn #${idx+1} từ kho`, 'info');
+            }
+        } catch(_) {}
+    }
+    if (!msg) { toast('Nhập nội dung tin nhắn hoặc thêm vào Kho Tin Nhắn trong Cài Đặt!', 'warning'); return; }
 
     const mode = window.__getSendMode ? window.__getSendMode() : 'phone';
+    const smartEnabled = document.getElementById('enableSmartSend')?.checked;
+
+    // ═══ SMART SEND 6-LAYER ═══
+    if (smartEnabled) {
+        const cookie = S.cookie;
+        const inviteEnabled = document.getElementById('enableGroupInvite')?.checked;
+        const inviteGroupId = inviteEnabled ? (document.getElementById('inviteGroupSelect')?.value || '') : '';
+        const inviteGroupId2 = inviteEnabled ? (document.getElementById('inviteGroupSelect2')?.value || '') : '';
+
+        const params = {
+            inputType: mode === 'group' ? 'groupId' : 'phones',
+            message: msg,
+            delay: parseInt(document.getElementById('sendDelay')?.value) || 3,
+            randomDelay: document.getElementById('randomDelay')?.checked !== false,
+            enableVariation: document.getElementById('msgVariation')?.checked !== false,
+            enableCooldown: document.getElementById('enableCooldown')?.checked !== false,
+            maxPerHour: Math.max(1, parseInt(document.getElementById('maxPerHour')?.value) || 30),
+            maxPerDay: Math.max(1, parseInt(document.getElementById('maxPerDay')?.value) || 200),
+        };
+
+        // Multi-group: gửi array các group IDs + per-group messages
+        const groupIds = [inviteGroupId, inviteGroupId2].filter(Boolean);
+        if (groupIds.length) {
+            params.inviteGroupIds = groupIds;
+            const msg1 = document.getElementById('msgGroup1')?.value?.trim();
+            const msg2 = document.getElementById('msgGroup2')?.value?.trim();
+            if (msg1 || msg2) {
+                params.groupMessages = [msg1 || msg, msg2 || msg]; // fallback to main msg
+            }
+        }
+
+        if (mode === 'group') {
+            const groupId = window.__getSelectedGroupId ? window.__getSelectedGroupId() : null;
+            if (!groupId) { toast('Hãy chọn một nhóm!', 'warning'); return; }
+            params.groupId = groupId;
+        } else {
+            const phones = getPhones('phoneInput');
+            if (!phones.length) { toast('Nhập danh sách số điện thoại!', 'warning'); return; }
+            params.phones = phones;
+        }
+
+        // Start UI
+        S.send = { running: true, paused: false, ok: 0, err: 0, wait: 0 };
+        setSendBtns(true);
+        document.getElementById('sendProgressCard').style.display = 'block';
+        updateSendProgress(0, 100);
+        updateSendStats();
+
+        const targetCount = params.phones?.length || '?';
+        log('info', `🚀 Smart Send 6-Layer: ${targetCount} targets | ${inviteGroupId ? 'Group invite ON' : 'No group invite'}`, 'send');
+        toast(`🚀 Smart Send bắt đầu — ${targetCount} targets`, 'info');
+
+        // Call backend
+        el.zalo.sendBulkSmart(cookie, params).then(result => {
+            if (!result.success && result.error) {
+                log('error', `❌ Smart Send lỗi: ${result.error}`, 'send');
+                toast('Smart Send lỗi: ' + result.error, 'error');
+                stopBulkSend();
+            }
+            // Progress events are handled by onBulkSmartProgress listener
+        }).catch(err => {
+            log('error', `❌ IPC Error: ${err.message}`, 'send');
+            stopBulkSend();
+        });
+
+        return;
+    }
+
+    // ═══ LEGACY SEND (khi Smart Send tắt) ═══
 
     if (mode === 'group') {
         const groupId = window.__getSelectedGroupId ? window.__getSelectedGroupId() : null;
@@ -434,7 +694,7 @@ function startBulkSend() {
 
         const group = S.groups.find(g => g.id === groupId);
         const groupName = group ? group.name : groupId;
-        const cookie = S.cookie || 'QR_SESSION';
+        const cookie = S.cookie;
 
         setSendBtns(true);
         log('info', `📁 Đang lấy ${group?.members || '?'} thành viên nhóm "${groupName}"...`, 'send');
@@ -1372,20 +1632,40 @@ function initSettings() {
     });
 
     // Đăng nhập QR thành công
-    el.onLoginSuccess?.((data) => {
+    el.onLoginSuccess?.(async (data) => {
         closeModal('qrModal');
         S.loggedIn = true;
-        S.cookie = 'QR_SESSION';
-        S.account = { name: 'Người dùng Zalo (QR)', phone: '***', uid: '', avatar: '' };
+        // Cookie thật từ main process, hoặc null nếu QR session chưa có cookie
+        S.cookie = (data?.cookie && data.cookie !== 'null' && data.cookie.length > 10)
+            ? data.cookie : null;
+        const uid = data?.uid || Date.now().toString();
+        const name = data?.name || 'Tài khoản Zalo (QR)';
+        S.account = { name, phone: '***', uid, avatar: '' };
         updateAccountUI();
+        // Lưu state đầy đủ
         el.store.set('loggedIn', true);
-        el.store.set('cookie', 'QR_SESSION');
+        el.store.set('cookie', S.cookie);
         el.store.set('account', S.account);
-        toast('🎉 Đăng nhập QR thành công! Có thể gửi tin ngay.', 'success');
-        log('success', '✅ Đăng nhập QR thành công!', 'send');
+        el.store.set('connectedAccount', { uid, name, ts: Date.now() });
+        toast('🎉 Đăng nhập QR thành công!', 'success');
+        log('success', `✅ Đăng nhập QR OK | ${name} (${uid})`, 'send');
+
+        // Hiện banner TK kết nối
+        window.dispatchEvent(new CustomEvent('zalo:loginSuccess_internal', { detail: { uid, name } }));
+
+        // Auto-save vào pool
+        try {
+            await el.zalo.poolAdd(S.cookie, name, uid);
+            refreshAccountList();
+            log('info', `📋 Pool: TK ${name} đã thêm`, 'send');
+        } catch (_) {}
+
         // Tự động tải danh sách nhóm
         loadRealGroups();
         navigate('groups');
+
+        // Sync Pipeline
+        if (window.syncPipelineFromSettings) setTimeout(window.syncPipelineFromSettings, 500);
     });
 
     // Lỗi QR
@@ -1395,10 +1675,7 @@ function initSettings() {
         log('error', '❌ Lỗi QR: ' + msg, 'send');
     });
 
-    document.getElementById('btnSaveSettings').addEventListener('click', () => {
-        saveState();
-        toast('Cài đặt đã được lưu!', 'success');
-    });
+    // btnSaveSettings handled by initSettingsV2 — removed duplicate here
 
     document.getElementById('btnLogout').addEventListener('click', () => {
         S.loggedIn = false;
@@ -1453,6 +1730,8 @@ async function doLogin() {
             navigate('groups');
             // Load real groups
             loadRealGroups();
+            // Bug7 fix: sync Pipeline với account mới đăng nhập
+            if (window.syncPipelineFromSettings) setTimeout(window.syncPipelineFromSettings, 500);
         } else {
             btn.disabled = false;
             btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Xác thực & Kết nối`;
@@ -1468,7 +1747,7 @@ async function doLogin() {
 
 async function loadRealGroups() {
     if (!S.loggedIn) return;
-    const cookie = S.cookie || 'QR_SESSION';
+    const cookie = S.cookie;
     log('info', '📋 Đang tải danh sách nhóm Zalo...', 'send');
     try {
         const result = await el.zalo.getGroups(cookie);
@@ -1488,7 +1767,9 @@ async function loadRealGroups() {
 function updateAccountUI() {
     if (S.loggedIn && S.account) {
         document.getElementById('statusDot').className = 'status-dot online';
-        document.getElementById('statusText').textContent = 'Đã kết nối';
+        // Bug11 fix: hiển thị tên user thật thay vì chỉ "Đã kết nối"
+        const uname = S.account.name || S.account.displayName || 'Đã kết nối';
+        document.getElementById('statusText').textContent = uname;
         const btn = document.getElementById('btnLoginGroup');
         if (btn) btn.style.display = 'none';
     } else {
@@ -1541,10 +1822,11 @@ window.insertVar = function (v) {
 
 // ── Real API callers (fallback to simulate if not in Electron) ────
 async function simulateSend(phone, message) {
-    // Hoạt động với cả QR session và cookie session
     if (el.zalo && (S.cookie || S.loggedIn)) {
         try {
-            const cookie = S.cookie || 'QR_SESSION';
+            // Bug8 fix: không dùng 'QR_SESSION' string làm cookie — fallback sang null để zca-js dùng session cache
+            const cookie = (S.cookie && S.cookie !== 'QR_SESSION') ? S.cookie : null;
+            if (!cookie) return { success: false, error: 'Phiên đăng nhập QR chưa có cookie thật. Vui lòng đăng nhập lại bằng cookie.' };
             const r = await el.zalo.sendMessage(cookie, phone, message);
             return r;
         } catch (e) {
@@ -1590,9 +1872,8 @@ async function loadState() {
     try {
         const all = await el.store.getAll();
         const cookie = all.cookie;
-        // Chỉ restore session nếu có cookie thật (không phải QR_SESSION)
-        // QR_SESSION không persist được qua restart (API object đã mất)
-        if (all.loggedIn && cookie && cookie !== 'QR_SESSION' && cookie.length > 20) {
+        // FIX #6: Accept cookie dù là QR session hay cookie thật, miễn length > 10
+        if (all.loggedIn && cookie && cookie.length > 10) {
             S.loggedIn = true;
             S.cookie = cookie;
             S.account = all.account || { name: 'Người dùng Zalo', phone: '***' };
@@ -1600,8 +1881,16 @@ async function loadState() {
             if (document.getElementById('cookieInput')) {
                 document.getElementById('cookieInput').value = cookie;
             }
+            // Restore connected account banner
+            const acct = all.connectedAccount;
+            if (acct && acct.uid) {
+                setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('zalo:loginSuccess_internal', {
+                        detail: { uid: acct.uid, name: acct.name || S.account.name }
+                    }));
+                }, 900);
+            }
         } else {
-            // Chưa đăng nhập hoặc session QR đã hết → reset
             S.loggedIn = false;
             S.cookie = null;
             updateAccountUI();
@@ -1661,7 +1950,7 @@ async function fillCopyGroupDropdowns(forceRefresh = false) {
         // Luôn fetch mới từ Zalo nếu forceRefresh hoặc chưa có groups
         let groups = S.groups || [];
         if (forceRefresh || groups.length === 0) {
-            const cookie = S.cookie || 'QR_SESSION';
+            const cookie = S.cookie;
             cpyLog('🔄 Đang tải danh sách nhóm từ Zalo...');
             const result = await el.zalo.getGroups(cookie);
             if (result.success && result.groups?.length) {
@@ -1718,7 +2007,7 @@ async function startCopyGroup() {
     const newName = document.getElementById('cpyNewName').value.trim();
     const batchSize = parseInt(document.getElementById('cpyBatch').value) || 5;
     const delayMs = (parseInt(document.getElementById('cpyDelay').value) || 2) * 1000;
-    const cookie = S.cookie || 'QR_SESSION';
+    const cookie = S.cookie;
 
     // Reset UI
     document.getElementById('cpyProgressCard').style.display = 'block';
@@ -1821,7 +2110,7 @@ function initCopyGroup() {
         btn.disabled = true;
         btn.textContent = '⏳ Đang phê duyệt...';
         cpyLog(`🔔 Đang lấy danh sách pending members của nhóm ${tgtId}...`);
-        const cookie = S.cookie || 'QR_SESSION';
+        const cookie = S.cookie;
         try {
             const r = await el.zalo.approvePending(cookie, tgtId);
             if (r.success) {
@@ -1850,7 +2139,7 @@ function initCopyGroup() {
         const btn = document.getElementById('btnForceJoinViaLink');
         btn.disabled = true;
         btn.textContent = '⏳ Đang gửi link mời...';
-        const cookie = S.cookie || 'QR_SESSION';
+        const cookie = S.cookie;
 
         cpyLog('🔗 Bước 1: Lấy thành viên nhóm nguồn...');
         try {
@@ -1892,7 +2181,7 @@ function initCopyGroup() {
             const batchSize = parseInt(document.getElementById('cpyBatch').value) || 80;
             const delayMs = (parseInt(document.getElementById('cpyDelay').value) || 2) * 1000;
             const newName = document.getElementById('cpyNewName')?.value?.trim() || '';
-            const cookie = S.cookie || 'QR_SESSION';
+            const cookie = S.cookie;
 
             // Reset UI
             document.getElementById('cpyProgressCard').style.display = 'block';
@@ -1945,3 +2234,1351 @@ function initCopyGroup() {
 }
 
 
+
+// ══════════════════════════════════════════════════════════════
+// AUTO PIPELINE UI — PERSISTENT DB + MESSAGE ROTATION LIBRARY
+// ══════════════════════════════════════════════════════════════
+(function initPipelineUI() {
+    const ipc = window.electron?.ipcRenderer;
+
+    // ── Helpers: store ──
+    async function dbGet(key, def = '') {
+        try { return (await ipc?.invoke('store:get', key)) ?? def; } catch(_) { return def; }
+    }
+    async function dbSet(key, val) {
+        try { await ipc?.invoke('store:set', key, val); } catch(_) {}
+    }
+
+    function lines(str) { return (str||'').split('\n').map(l=>l.trim()).filter(Boolean); }
+    function badge(id, arr, unit='') {
+        const el = document.getElementById(id);
+        if (el) el.textContent = `${arr.length} ${unit}`;
+    }
+
+    // ── Load all persisted values on DOMContentLoaded / navigate ──
+    async function loadDB() {
+        const [cookies, groups, customers, dest, msgs, tgToken, tgChatId, maxPG] = await Promise.all([
+            dbGet('pipe_cookies',''), dbGet('pipe_groups',''),
+            dbGet('pipe_customers',''), dbGet('pipe_dest',''),
+            dbGet('pipe_msgs','[]'), dbGet('pipe_tg_token',''),
+            dbGet('pipe_tg_chatid',''), dbGet('pipe_max_per_group','200')
+        ]);
+        setVal('pipeCookies', cookies);    badge('pipeAcctCount',   lines(cookies), 'TK');
+        setVal('pipeGroupLinks', groups);  badge('pipeLinkCount',   lines(groups),  'links');
+        setVal('pipeCustomers', customers);badge('pipeCustomerCount',lines(customers),'người');
+        setVal('pipeDestGroups', dest);
+        setVal('pipeTgToken', tgToken);
+        setVal('pipeTgChatId', tgChatId);
+        const mpg = document.getElementById('pipeMaxPerGroup');
+        if (mpg) mpg.value = maxPG;
+
+        // Load message library
+        try {
+            const arr = JSON.parse(msgs);
+            arr.forEach(m => addMsgCard(m, false));
+            badge('pipeMsgCount', arr, 'tin');
+        } catch(_){}
+    }
+
+    function setVal(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+
+    // ── Message Rotation Library ──
+    let msgLibrary = [];
+
+    function saveMsgs() {
+        dbSet('pipe_msgs', JSON.stringify(msgLibrary));
+        badge('pipeMsgCount', msgLibrary, 'tin');
+    }
+
+    function addMsgCard(text, persist = true) {
+        if (!text || !text.trim()) return;
+        if (msgLibrary.indexOf(text.trim()) === -1) msgLibrary.push(text.trim());
+        renderMsgList();
+        if (persist) saveMsgs();
+    }
+
+    function renderMsgList() {
+        const list = document.getElementById('pipeMsgList');
+        if (!list) return;
+        list.innerHTML = '';
+        msgLibrary.forEach((msg, idx) => {
+            const card = document.createElement('div');
+            card.style.cssText = 'display:flex;gap:6px;align-items:flex-start;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03)';
+            card.innerHTML = `
+                <div style="flex:1;font-size:12px;color:var(--text-h);white-space:pre-wrap;word-break:break-word">${escHtml(msg)}</div>
+                <button style="padding:3px 8px;border-radius:6px;border:none;background:rgba(239,68,68,0.15);color:#ef4444;cursor:pointer;font-size:11px;white-space:nowrap" data-idx="${idx}">✕</button>
+            `;
+            card.querySelector('button').addEventListener('click', (e) => {
+                const i = parseInt(e.target.dataset.idx);
+                msgLibrary.splice(i, 1);
+                renderMsgList();
+                saveMsgs();
+            });
+            list.appendChild(card);
+        });
+        badge('pipeMsgCount', msgLibrary, 'tin');
+    }
+
+    function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Stage Highlight ──
+    const stageMap = { joining:'pstage1', filtering:'pstage2', harvesting:'pstage3', scoring:'pstage4', sending:'pstage5' };
+    function highlightStage(stageName) {
+        ['pstage1','pstage2','pstage3','pstage4','pstage5'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.background = ''; el.style.borderColor = 'rgba(255,255,255,0.08)'; el.style.color = '';
+        });
+        const el = document.getElementById(stageMap[stageName]);
+        if (el) {
+            el.style.background = 'linear-gradient(135deg,rgba(102,126,234,0.3),rgba(245,158,11,0.2))';
+            el.style.borderColor = '#667eea'; el.style.color = '#fff'; el.style.fontWeight = '700';
+        }
+    }
+    function markStageDone(stageName) {
+        const el = document.getElementById(stageMap[stageName]);
+        if (el) { el.style.background = 'rgba(16,185,129,0.15)'; el.style.borderColor = '#10b981'; }
+    }
+
+    // ── Log ──
+    function addPipeLog(msg, type = '') {
+        const body = document.getElementById('pipeLogBody');
+        if (!body) return;
+        const d = document.createElement('div');
+        d.className = `log-entry ${type}`;
+        d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        body.prepend(d);
+        if (body.children.length > 300) body.lastChild?.remove();
+    }
+
+    // ── Progress handler ──
+    let pipeOkN = 0, pipeFailN = 0;
+    window.electron?.onPipelineProgress?.((p) => {
+        const status = document.getElementById('pipeStatusText');
+        const pct    = document.getElementById('pipePct');
+        const fill   = document.getElementById('pipeProgressFill');
+        if (status) status.textContent = p.status || '';
+        if (pct)    pct.textContent = `${p.pct||0}%`;
+        if (fill)   fill.style.width = `${p.pct||0}%`;
+        if (p.stage) highlightStage(p.stage);
+        if (p.pipeline?.harvestedCount) {
+            const el = document.getElementById('pipeHarvested');
+            if (el) el.textContent = p.pipeline.harvestedCount;
+        }
+        addPipeLog(p.status || '', p.stage === 'error' ? 'err' : '');
+        if (p.stage === 'done' || p.stage === 'error') {
+            resetBtns();
+            if (p.pipeline?.sendResult) {
+                pipeOkN   += p.pipeline.sendResult.sent   || 0;
+                pipeFailN += p.pipeline.sendResult.failed || 0;
+                const elOk   = document.getElementById('pipeOk');
+                const elFail = document.getElementById('pipeFail');
+                if (elOk)   elOk.textContent   = pipeOkN;
+                if (elFail) elFail.textContent  = pipeFailN;
+            }
+            if (p.stage === 'done') Object.keys(stageMap).forEach(s => markStageDone(s));
+        }
+    });
+
+    function resetBtns() {
+        const s = document.getElementById('btnStartPipeline');
+        const x = document.getElementById('btnStopPipeline');
+        if (s) { s.disabled = false; s.textContent = '⚡ Chạy Pipeline'; }
+        if (x)   x.disabled = true;
+    }
+
+    // ── Wire buttons after DOM ready ──
+    function wireButtons() {
+
+        // Save accounts
+        document.getElementById('btnPipeSaveAcct')?.addEventListener('click', () => {
+            const v = document.getElementById('pipeCookies')?.value || '';
+            dbSet('pipe_cookies', v);
+            badge('pipeAcctCount', lines(v), 'TK');
+            addPipeLog('✅ Đã lưu tài khoản');
+        });
+        document.getElementById('btnPipeClearAcct')?.addEventListener('click', () => {
+            if (!confirm('Xóa toàn bộ cookies đã lưu?')) return;
+            setVal('pipeCookies',''); dbSet('pipe_cookies','');
+            badge('pipeAcctCount', [], 'TK');
+        });
+
+        // Save groups
+        document.getElementById('btnPipeSaveGroups')?.addEventListener('click', () => {
+            const v = document.getElementById('pipeGroupLinks')?.value || '';
+            dbSet('pipe_groups', v);
+            badge('pipeLinkCount', lines(v), 'links');
+            addPipeLog(`✅ Đã lưu ${lines(v).length} groups`);
+        });
+        document.getElementById('btnPipeAppendGroups')?.addEventListener('click', async () => {
+            const cur  = await dbGet('pipe_groups','');
+            const newV = document.getElementById('pipeGroupLinks')?.value || '';
+            const combined = [...new Set([...lines(cur), ...lines(newV)])].join('\n');
+            setVal('pipeGroupLinks', combined);
+            dbSet('pipe_groups', combined);
+            badge('pipeLinkCount', lines(combined), 'links');
+            addPipeLog(`✅ Đã thêm vào DB: ${lines(combined).length} groups`);
+        });
+        document.getElementById('btnPipeClearGroups')?.addEventListener('click', () => {
+            if (!confirm('Xóa toàn bộ danh sách nhóm?')) return;
+            setVal('pipeGroupLinks',''); dbSet('pipe_groups','');
+            badge('pipeLinkCount', [], 'links');
+        });
+
+        // Update count live as user types
+        document.getElementById('pipeGroupLinks')?.addEventListener('input', (e) => {
+            badge('pipeLinkCount', lines(e.target.value), 'links');
+        });
+
+        // Save customers
+        document.getElementById('btnPipeSaveCustomers')?.addEventListener('click', () => {
+            const v = document.getElementById('pipeCustomers')?.value || '';
+            dbSet('pipe_customers', v);
+            badge('pipeCustomerCount', lines(v), 'người');
+            addPipeLog(`✅ Đã lưu ${lines(v).length} khách hàng`);
+        });
+        document.getElementById('btnPipeAppendCustomers')?.addEventListener('click', async () => {
+            const cur  = await dbGet('pipe_customers','');
+            const newV = document.getElementById('pipeCustomers')?.value || '';
+            const combined = [...new Set([...lines(cur), ...lines(newV)])].join('\n');
+            setVal('pipeCustomers', combined);
+            dbSet('pipe_customers', combined);
+            badge('pipeCustomerCount', lines(combined), 'người');
+            addPipeLog(`✅ ${lines(combined).length} khách hàng trong DB`);
+        });
+        document.getElementById('btnPipeClearCustomers')?.addEventListener('click', () => {
+            if (!confirm('Xóa danh sách khách hàng?')) return;
+            setVal('pipeCustomers',''); dbSet('pipe_customers','');
+            badge('pipeCustomerCount', [], 'người');
+        });
+
+        document.getElementById('pipeCustomers')?.addEventListener('input', (e) => {
+            badge('pipeCustomerCount', lines(e.target.value), 'người');
+        });
+        document.getElementById('pipeCookies')?.addEventListener('input', (e) => {
+            badge('pipeAcctCount', lines(e.target.value), 'TK');
+        });
+
+        // Save dest groups
+        document.getElementById('btnPipeSaveDest')?.addEventListener('click', () => {
+            const v = document.getElementById('pipeDestGroups')?.value || '';
+            dbSet('pipe_dest', v); addPipeLog('✅ Đã lưu nhóm đích');
+        });
+
+        // Settings — auto-save on blur
+        ['pipeTgToken','pipeTgChatId'].forEach(id => {
+            document.getElementById(id)?.addEventListener('blur', (e) => {
+                dbSet(id === 'pipeTgToken' ? 'pipe_tg_token' : 'pipe_tg_chatid', e.target.value);
+            });
+        });
+        document.getElementById('pipeMaxPerGroup')?.addEventListener('change', (e) => {
+            dbSet('pipe_max_per_group', e.target.value);
+        });
+
+        // Add message to library
+        document.getElementById('btnAddPipeMsg')?.addEventListener('click', () => {
+            const ta = document.getElementById('pipeNewMsg');
+            if (!ta || !ta.value.trim()) return;
+            addMsgCard(ta.value.trim());
+            ta.value = '';
+        });
+        document.getElementById('pipeNewMsg')?.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') document.getElementById('btnAddPipeMsg')?.click();
+        });
+
+        // Reset all DB
+        document.getElementById('btnPipeReset')?.addEventListener('click', () => {
+            if (!confirm('Xóa TOÀN BỘ dữ liệu Pipeline (accounts, groups, messages)?')) return;
+            ['pipe_cookies','pipe_groups','pipe_customers','pipe_dest','pipe_msgs','pipe_tg_token','pipe_tg_chatid'].forEach(k => dbSet(k,''));
+            ['pipeCookies','pipeGroupLinks','pipeCustomers','pipeDestGroups','pipeTgToken','pipeTgChatId'].forEach(id => setVal(id,''));
+            msgLibrary = []; renderMsgList();
+            ['pipeAcctCount','pipeLinkCount','pipeCustomerCount','pipeMsgCount'].forEach(id => {
+                const el = document.getElementById(id); if(el) el.textContent = '0';
+            });
+            addPipeLog('🗑 Đã xóa toàn bộ DB Pipeline', 'err');
+        });
+
+        // Clear log
+        document.getElementById('btnClearPipeLog')?.addEventListener('click', () => {
+            const b = document.getElementById('pipeLogBody'); if(b) b.innerHTML='';
+        });
+
+        // ── START PIPELINE ──
+        document.getElementById('btnStartPipeline')?.addEventListener('click', async () => {
+            let cookiesRaw = document.getElementById('pipeCookies')?.value || '';
+            if (!cookiesRaw.trim()) {
+                const primaryCookie = await ipc?.invoke('store:get', 'cookie');
+                const pool = (await ipc?.invoke('store:get', 'settingsPool')) || [];
+                const allCookies = [primaryCookie, ...pool.map(t => t.cookie)].filter(Boolean);
+                cookiesRaw = allCookies.join('\n');
+            }
+            const cookies  = lines(cookiesRaw);
+            const groupLinks = lines(document.getElementById('pipeGroupLinks')?.value || '');
+            const customers  = lines(document.getElementById('pipeCustomers')?.value || '');
+            const destGroups = lines(document.getElementById('pipeDestGroups')?.value || '');
+            const maxPerGroup = parseInt(document.getElementById('pipeMaxPerGroup')?.value || '200');
+            const phoneScan   = document.getElementById('pipePhoneScan')?.checked || false;
+
+            const tgSettings = (await ipc?.invoke('store:get', 'telegramSettings')) || {};
+            const tgToken  = tgSettings.token  || '';
+            const tgChatId = tgSettings.chatId || '';
+
+            let msgs = msgLibrary.slice();
+            if (msgs.length === 0) {
+                const storedMsgs = (await ipc?.invoke('store:get', 'settingsMsgs')) || [];
+                msgs = storedMsgs;
+                if (msgs.length > 0) addPipeLog(`📋 Lấy ${msgs.length} tin nhắn từ Kho (Cài Đặt)`);
+            }
+
+            if (!S.loggedIn && !cookies.length) { alert('Cần ít nhất 1 cookie! Hãy đăng nhập tại Cài Đặt trước.'); return; }
+            if (!groupLinks.length && !customers.length) { alert('Cần ít nhất 1 link nhóm hoặc 1 khách hàng!'); return; }
+            if (!msgs.length) { alert('Cần ít nhất 1 tin nhắn trong kho! Thêm tại Cài Đặt → Kho Tin Nhắn.'); return; }
+
+            pipeOkN = 0; pipeFailN = 0;
+            ['pipeOk','pipeFail','pipeHarvested'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent='0'; });
+            document.getElementById('pipeProgressFill').style.width = '0%';
+            document.getElementById('pipeStatusText').textContent = 'Đang khởi động...';
+            document.getElementById('pipePct').textContent = '0%';
+            document.getElementById('pipeLogBody').innerHTML = '';
+
+            const btnStart = document.getElementById('btnStartPipeline');
+            const btnStop  = document.getElementById('btnStopPipeline');
+            if (btnStart) { btnStart.disabled = true; btnStart.textContent = '⏳ Đang chạy...'; }
+            if (btnStop)    btnStop.disabled = false;
+
+            highlightStage('joining');
+            addPipeLog(`🚀 Pipeline: ${groupLinks.length} groups | ${cookies.length} TK | ${msgs.length} msgs | ${customers.length} KH | TG: ${tgToken ? '✓' : '✗'}`);
+
+            try {
+                await ipc?.invoke('zalo:runFullPipeline', {
+                    cookies, groupLinks, extraTargets: customers,
+                    destGroupIds: destGroups, messages: msgs,
+                    telegramToken: tgToken, telegramChatId: tgChatId,
+                    opts: { maxPerGroup, phoneScan }
+                });
+            } catch(e) {
+                addPipeLog(`❌ Lỗi: ${e.message}`, 'err');
+                resetBtns();
+            }
+        });
+
+        // ── STOP ──
+        document.getElementById('btnStopPipeline')?.addEventListener('click', async () => {
+            await ipc?.invoke('zalo:cancelPipeline');
+            addPipeLog('⛔ Đã yêu cầu dừng...', 'err');
+            document.getElementById('btnStopPipeline').disabled = true;
+        });
+    }
+
+    // ── Init: load DB then wire ──
+    loadDB().then(() => wireButtons());
+
+})();
+
+// ═══ QR Login cho TK Phụ (Account Pool) ═══
+(function initPoolQR() {
+    const ipc = window.electronAPI;
+    const $ = id => document.getElementById(id);
+    let _poolQrActive = false;
+
+    function showPoolQrModal() {
+        const modal = $('poolQrModal');
+        if (modal) { modal.style.display = 'flex'; }
+        if ($('poolQrImg')) $('poolQrImg').innerHTML = '<span>⏳ Đang tạo QR...</span>';
+        if ($('poolQrStatus')) $('poolQrStatus').textContent = 'Đang kết nối...';
+        _poolQrActive = true;
+    }
+    function hidePoolQrModal() {
+        const modal = $('poolQrModal');
+        if (modal) modal.style.display = 'none';
+        _poolQrActive = false;
+    }
+
+    $('btnPoolLoginQR')?.addEventListener('click', async () => {
+        showPoolQrModal();
+        try { await ipc?.invoke('zalo:loginQR'); }
+        catch(e) { if ($('poolQrStatus')) $('poolQrStatus').textContent = '❌ Lỗi: ' + e.message; }
+    });
+    $('btnPoolQrClose')?.addEventListener('click', () => hidePoolQrModal());
+
+    // Nhận QR image
+    ipc?.on?.('zalo:qrReady', (_ev, dataUrl) => {
+        if (!_poolQrActive) return;
+        if ($('poolQrImg')) $('poolQrImg').innerHTML = '<img src="' + dataUrl + '" style="width:190px;height:190px;border-radius:8px;object-fit:contain" />';
+        if ($('poolQrStatus')) $('poolQrStatus').textContent = 'Quét QR bằng điện thoại TK phụ...';
+    });
+
+    // Nhận kết quả đăng nhập thành công
+    ipc?.on?.('zalo:loginSuccess', async (_ev, data) => {
+        if (!_poolQrActive || !data?.success) return;
+        const status = $('poolQrStatus');
+        if (status) { status.textContent = '✅ Đăng nhập thành công!'; status.style.color = '#10b981'; }
+        try {
+            const cookie = await ipc.invoke('store:get', 'cookie');
+            if (!cookie) throw new Error('Không lấy được cookie');
+            const info = await ipc.invoke('zalo:verify', cookie);
+            const uid = info?.user?.uid || ('pool_' + Date.now());
+            const name = info?.user?.name || ('TK ' + (Date.now() % 1000));
+            const settingsPool = (await ipc.invoke('store:get', 'settingsPool')) || [];
+            if (!settingsPool.some(tk => tk.uid === uid)) {
+                settingsPool.push({ cookie, name, uid, addedAt: Date.now() });
+                await ipc.invoke('store:set', 'settingsPool', settingsPool);
+                await ipc.invoke('zalo:accountPool:add', cookie, name, uid);
+            }
+            window.dispatchEvent(new CustomEvent('pool:refresh'));
+            setTimeout(hidePoolQrModal, 1500);
+        } catch(e) {
+            if (status) { status.textContent = '❌ ' + e.message; status.style.color = '#ef4444'; }
+        }
+    });
+
+    window.addEventListener('pool:refresh', async () => {
+        const pool = (await ipc?.invoke('store:get', 'settingsPool')) || [];
+        if ($('settingsPoolCount')) $('settingsPoolCount').textContent = pool.length + ' TK';
+    });
+})();
+
+// ════════════════════════════════════════════════════════════════
+// SETTINGS v2.2 — Account Banner + Pool + Telegram + Kho tin nhắn
+// ════════════════════════════════════════════════════════════════
+(function initSettingsV2() {
+    const ipc = window.electronAPI;
+    const $ = id => document.getElementById(id);
+    const store = {
+        get: k => ipc?.invoke('store:get', k),
+        set: (k, v) => ipc?.invoke('store:set', k, v),
+    };
+
+    // ── 1. Account Banner ──
+    async function showConnectedBanner(info) {
+        if (!info || !info.uid) return;
+        const banner = $('connectedAccountBanner');
+        const loginSec = $('loginSection');
+        if (banner) {
+            banner.style.display = 'block';
+            $('connAcctName').textContent = info.name || info.displayName || 'Tài khoản Zalo';
+            $('connAcctUid').textContent = info.uid || '—';
+            $('connAcctTime').textContent = new Date().toLocaleTimeString('vi-VN');
+            $('connAcctAvatar').textContent = (info.name || 'Z')[0].toUpperCase();
+        }
+        if (loginSec) loginSec.style.display = 'none';
+    }
+
+    function hideConnectedBanner() {
+        const banner = $('connectedAccountBanner');
+        const loginSec = $('loginSection');
+        if (banner) banner.style.display = 'none';
+        if (loginSec) loginSec.style.display = 'block';
+    }
+
+    // Restore banner on load
+    (async () => {
+        const info = await store.get('connectedAccount');
+        if (info && info.uid) showConnectedBanner(info);
+    })();
+
+    // Disconnect
+    $('btnDisconnectAcct')?.addEventListener('click', async () => {
+        await store.set('cookie', '');
+        await store.set('connectedAccount', null);
+        hideConnectedBanner();
+    });
+
+    // Hook into login success events
+    window.addEventListener('zalo:loginSuccess_internal', async e => {
+        const info = e.detail;
+        await store.set('connectedAccount', { uid: info.uid, name: info.name, ts: Date.now() });
+        showConnectedBanner(info);
+    });
+
+    if (ipc?.on) {
+        ipc.on('zalo:loginSuccess', async (_ev, data) => {
+            if (data && data.success) {
+                try {
+                    const cookie = await store.get('cookie');
+                    if (cookie) {
+                        const r = await ipc.invoke('zalo:verify', cookie);
+                        if (r && r.user?.uid) {
+                            await store.set('connectedAccount', { uid: r.user.uid, name: r.user.name || r.displayName, ts: Date.now() });
+                            showConnectedBanner({ uid: r.user.uid, name: r.user.name || r.displayName });
+                        }
+                    }
+                } catch(_) {}
+            }
+        });
+    }
+
+    // ── 2. Account Pool ──
+    let settingsPool = [];
+
+    async function loadSettingsPool() {
+        settingsPool = (await store.get('settingsPool')) || [];
+        renderSettingsPool();
+    }
+
+    function renderSettingsPool() {
+        const list = $('settingsPoolList');
+        const badge = $('settingsPoolCount');
+        if (!list) return;
+        if (badge) badge.textContent = settingsPool.length + ' TK';
+        if (settingsPool.length === 0) {
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px;border:1px dashed var(--card-border);border-radius:8px">Chưa có tài khoản phụ nào</div>';
+            return;
+        }
+        list.innerHTML = settingsPool.map((tk, i) => {
+            const initial = (tk.name || 'T')[0].toUpperCase();
+            const cookiePreview = tk.cookie ? tk.cookie.slice(0, 20) + '...' : '—';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.03)">'
+                + '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px">' + initial + '</div>'
+                + '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">' + (tk.name || 'TK ' + (i+1)) + '</div>'
+                + '<div style="font-size:10px;color:var(--text-muted)">Cookie: ' + cookiePreview + '</div></div>'
+                + '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(16,185,129,0.15);color:#10b981">Sẵn sàng</span>'
+                + '<button onclick="window._removePoolTk(' + i + ')" style="background:rgba(239,68,68,0.1);color:#ef4444;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px">✕</button>'
+                + '</div>';
+        }).join('');
+    }
+
+    window._removePoolTk = async (i) => {
+        settingsPool.splice(i, 1);
+        await store.set('settingsPool', settingsPool);
+        try { await ipc?.invoke('zalo:accountPool:remove', settingsPool[i]?.uid); } catch(_) {}
+        renderSettingsPool();
+    };
+
+    $('btnSettingsPoolAdd')?.addEventListener('click', async () => {
+        const cookie = $('settingsPoolCookie')?.value?.trim();
+        const name = $('settingsPoolName')?.value?.trim() || ('TK ' + (settingsPool.length + 2));
+        if (!cookie) { alert('Vui lòng nhập cookie!'); return; }
+        try {
+            const r = await ipc?.invoke('zalo:verify', cookie);
+            if (!r?.success) { alert('Cookie không hợp lệ hoặc hết hạn!'); return; }
+            const uid = r?.user?.uid || ('tk_' + Date.now());
+            const realName = r?.user?.name || name;
+            settingsPool.push({ cookie, name: realName, uid, addedAt: Date.now() });
+            await store.set('settingsPool', settingsPool);
+            await ipc?.invoke('zalo:accountPool:add', cookie, realName, uid);
+            $('settingsPoolCookie').value = '';
+            $('settingsPoolName').value = '';
+            renderSettingsPool();
+        } catch(e) {
+            alert('Lỗi xác thực cookie: ' + e.message);
+        }
+    });
+
+    loadSettingsPool();
+
+    // ── 3. Telegram Thông Báo ──
+    async function loadTelegramSettings() {
+        const tg = (await store.get('telegramSettings')) || {};
+        if ($('settingsTgToken')) $('settingsTgToken').value = tg.token || '';
+        if ($('settingsTgChatId')) $('settingsTgChatId').value = tg.chatId || '';
+    }
+
+    $('btnTestTelegram')?.addEventListener('click', async () => {
+        const token = $('settingsTgToken')?.value?.trim();
+        const chatId = $('settingsTgChatId')?.value?.trim();
+        const result = $('tgTestResult');
+        if (!token || !chatId) { if(result) result.textContent = '⚠️ Nhập token và chat ID!'; return; }
+        if(result) result.textContent = '⏳ Đang gửi...';
+        try {
+            const res = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ chat_id: chatId, text: '✅ Zalo Bulk Tool Pro — Kết nối Telegram thành công!' })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                if(result) { result.textContent = '✅ Gửi thành công!'; result.style.color = '#10b981'; }
+                await store.set('telegramSettings', { token, chatId });
+            } else {
+                if(result) { result.textContent = '❌ ' + (data.description || 'Lỗi'); result.style.color = '#ef4444'; }
+            }
+        } catch(e) {
+            if(result) { result.textContent = '❌ ' + e.message; result.style.color = '#ef4444'; }
+        }
+    });
+
+    loadTelegramSettings();
+
+    // ── 4. Kho Tin Nhắn ──
+    let settingsMsgs = [];
+
+    async function loadSettingsMsgs() {
+        settingsMsgs = (await store.get('settingsMsgs')) || [];
+        renderSettingsMsgs();
+    }
+
+    function renderSettingsMsgs() {
+        const list = $('settingsMsgList');
+        const badge = $('settingsMsgCount');
+        if (badge) badge.textContent = settingsMsgs.length + ' mẫu';
+        if (!list) return;
+        if (settingsMsgs.length === 0) {
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px;border:1px dashed var(--card-border);border-radius:8px">Chưa có tin nhắn mẫu nào</div>';
+            return;
+        }
+        list.innerHTML = settingsMsgs.map((msg, i) => {
+            const preview = msg.length > 120 ? msg.slice(0,120) + '…' : msg;
+            return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.03)">'
+                + '<span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;flex-shrink:0;margin-top:1px">#' + (i+1) + '</span>'
+                + '<div style="flex:1;font-size:12px;color:var(--text-h);white-space:pre-wrap;word-break:break-all">' + preview + '</div>'
+                + '<button onclick="window._removeSettingsMsg(' + i + ')" style="background:rgba(239,68,68,0.1);color:#ef4444;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;flex-shrink:0">✕</button>'
+                + '</div>';
+        }).join('');
+    }
+
+    window._removeSettingsMsg = async (i) => {
+        settingsMsgs.splice(i, 1);
+        await store.set('settingsMsgs', settingsMsgs);
+        renderSettingsMsgs();
+    };
+
+    $('btnAddSettingsMsg')?.addEventListener('click', async () => {
+        const msg = $('settingsNewMsg')?.value?.trim();
+        if (!msg) return;
+        settingsMsgs.push(msg);
+        await store.set('settingsMsgs', settingsMsgs);
+        $('settingsNewMsg').value = '';
+        renderSettingsMsgs();
+    });
+
+    // Ctrl+Enter để thêm nhanh
+    $('settingsNewMsg')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.ctrlKey) $('btnAddSettingsMsg')?.click();
+    });
+
+    loadSettingsMsgs();
+
+    // ── 5. Save Settings ──
+    $('btnSaveSettings')?.addEventListener('click', async () => {
+        const token = $('settingsTgToken')?.value?.trim();
+        const chatId = $('settingsTgChatId')?.value?.trim();
+        if (token && chatId) await store.set('telegramSettings', { token, chatId });
+        if (settingsMsgs.length > 0) await store.set('pipeMessages', settingsMsgs);
+        alert('✅ Đã lưu cài đặt!');
+    });
+
+    // ── 6. Pipeline — tự dùng cookie từ store ──
+    const origPipeBtn = $('btnStartPipeline');
+    if (origPipeBtn) {
+        origPipeBtn.addEventListener('click', async () => {
+            const pipeArea = $('pipeCookies');
+            if (pipeArea && !pipeArea.value.trim()) {
+                const storedCookie = await store.get('cookie');
+                if (storedCookie) {
+                    pipeArea.value = storedCookie;
+                }
+            }
+        }, true); // capture phase
+    }
+
+})();
+
+
+
+// ════════════════════════════════════════════════════════════════
+// SCAN NHÓM MỞ CHAT — Kiểm tra 100 link nhóm
+// ════════════════════════════════════════════════════════════════
+(function initScanOpenChat() {
+    const $ = id => document.getElementById(id);
+    let _openLinks = [];
+    let _scanning = false;
+
+    function parseGroupId(link) {
+        const match = link.match(/zalo\.me\/g\/(\w+)/i) || link.match(/([a-z0-9]{6,20})$/i);
+        return match ? match[1] : null;
+    }
+
+    function parseGroupLinks(raw) {
+        return raw.split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 5);
+    }
+
+    function updateScanUI(scanOpen, scanClosed, pct) {
+        const progress = $('scanProgressFill');
+        if (progress) progress.style.width = pct + '%';
+        const pctEl = $('scanPct');
+        if (pctEl) pctEl.textContent = pct + '%';
+        const openBadge = $('scanOpenCount');
+        if (openBadge) openBadge.textContent = scanOpen + ' mở';
+        const closedBadge = $('scanClosedCount');
+        if (closedBadge) closedBadge.textContent = scanClosed + ' đóng';
+    }
+
+    $('btnScanGroups')?.addEventListener('click', async () => {
+        if (_scanning) return;
+        const raw = $('scanGroupLinks')?.value || '';
+        const links = parseGroupLinks(raw);
+        if (links.length === 0) { toast('Nhập ít nhất 1 link nhóm!', 'warning'); return; }
+
+        // Get cookie — QR login có thể không có cookie string, dùng null để zca-js dùng session cache
+        const cookie = S.cookie || (await el.store.get('cookie')) || null;
+        if (!S.loggedIn && (!cookie || cookie.length < 5)) {
+            toast('Cần đăng nhập trước! Vào Cài Đặt → đăng nhập QR.', 'error');
+            return;
+        }
+
+        _scanning = true;
+        _openLinks = [];
+        const closedLinks = [];
+
+        // UI
+        $('scanProgressBar').style.display = 'block';
+        $('scanResults').style.display = 'none';
+        $('btnScanGroups').disabled = true;
+        $('btnScanGroups').textContent = '⏳ Đang scan...';
+        $('btnCopyScanOpen').disabled = true;
+        $('btnCopyScanAll').disabled = true;
+        updateScanUI(0, 0, 0);
+        $('scanStatusText').textContent = 'Chuẩn bị scan ' + links.length + ' nhóm...';
+
+        const groupIds = links.map(l => parseGroupId(l) || l);
+        const validLinks = links.filter((_, i) => groupIds[i]);
+
+        try {
+            const BATCH = 20;
+            let processed = 0;
+            for (let b = 0; b < groupIds.length; b += BATCH) {
+                const batch = groupIds.slice(b, b + BATCH);
+                const batchLinks = validLinks.slice(b, b + BATCH);
+
+                $('scanStatusText').textContent = 'Đang scan ' + (b+1) + '–' + Math.min(b+BATCH, groupIds.length) + ' / ' + groupIds.length + '...';
+
+                try {
+                    const result = await el.zalo.checkGroupChatStatus(cookie, batch);
+                    // FIX: checkGroupChatStatus trả mảng trực tiếp (statusList), không phải {results:[...]}
+                    const items = Array.isArray(result) ? result : (result?.results || result?.statusList || []);
+                    items.forEach((r, idx) => {
+                        const originalLink = batchLinks[idx] || batch[idx];
+                        // FIX: field đúng là isOpenChat, không phải openChat/chatEnabled/status
+                        if (r.isOpenChat === true) {
+                            _openLinks.push({ link: originalLink, name: r.groupName || r.name || r.groupId || originalLink });
+                        } else {
+                            closedLinks.push({ link: originalLink, name: r.groupName || r.name || r.groupId || originalLink });
+                        }
+                    });
+                } catch(batchErr) {
+                    console.error("Scan batch error:", batchErr);
+                    batchLinks.forEach(link => closedLinks.push({ link, name: link }));
+                }
+                processed += batch.length;
+                const pct = Math.round((processed / groupIds.length) * 100);
+                updateScanUI(_openLinks.length, closedLinks.length, pct);
+                if (b + BATCH < groupIds.length) await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000));
+            }
+        } catch(e) {
+            $('scanStatusText').textContent = '❌ Lỗi: ' + e.message;
+        }
+
+        // Show results
+        $('scanProgressFill').style.width = '100%';
+        $('scanPct').textContent = '100%';
+
+        const _noResult = _openLinks.length === 0 && closedLinks.length === 0;
+        $('scanStatusText').textContent = _noResult
+            ? '⚠️ Không scan được — cần đăng nhập QR trước hoặc link nhóm không hợp lệ'
+            : `Hoàn thành! ${_openLinks.length} nhóm mở, ${closedLinks.length} nhóm đóng.`;
+        $('scanResults').style.display = 'block';
+        $('openChatTotal').textContent = _openLinks.length;
+        $('closedChatTotal').textContent = closedLinks.length;
+
+        // Render open list
+        $('openChatList').innerHTML = _openLinks.length === 0
+            ? '<span style="color:var(--text-muted)">Không có nhóm mở</span>'
+            : _openLinks.map(g => `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+                <span>${g.name || g.link}</span>
+                <a href="${g.link}" style="color:#667eea;font-size:10px" target="_blank">🔗</a>
+              </div>`).join('');
+
+        // Render closed list
+        $('closedChatList').innerHTML = closedLinks.length === 0
+            ? '<span style="color:var(--text-muted)">Không có nhóm đóng</span>'
+            : closedLinks.map(g => `<div style="color:var(--text-muted);padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${g.name || g.link}</div>`).join('');
+
+        updateScanUI(_openLinks.length, closedLinks.length, 100);
+        toast(`Scan xong: ${_openLinks.length} nhóm mở chat`, _openLinks.length > 0 ? 'success' : 'info');
+
+        // Enable copy buttons
+        if (_openLinks.length > 0) {
+            $('btnCopyScanOpen').disabled = false;
+            $('btnCopyScanAll').disabled = false;
+        }
+        $('btnScanGroups').disabled = false;
+        $('btnScanGroups').textContent = '🔍 Scan lại';
+        _scanning = false;
+    });
+
+    // Copy nhóm mở
+    $('btnCopyScanOpen')?.addEventListener('click', () => {
+        const text = _openLinks.map(g => g.link).join('\n');
+        navigator.clipboard.writeText(text).then(() => toast('Đã copy ' + _openLinks.length + ' link nhóm mở!', 'success'));
+    });
+
+    // Dùng vào Pipeline — inject vào pipeGroupLinks
+    $('btnCopyScanAll')?.addEventListener('click', () => {
+        const pipeLinks = document.getElementById('pipeGroupLinks');
+        if (pipeLinks) {
+            const existing = pipeLinks.value.trim();
+            const newLinks = _openLinks.map(g => g.link).join('\n');
+            pipeLinks.value = existing ? existing + '\n' + newLinks : newLinks;
+            // Update badge
+            const lines = v => v.split('\n').map(l=>l.trim()).filter(l=>l.length>5);
+            const badge = document.getElementById('pipeLinkCount');
+            if (badge) badge.textContent = lines(pipeLinks.value).length + ' links';
+            toast(`Đã thêm ${_openLinks.length} nhóm mở vào Pipeline!`, 'success');
+            // Scroll to pipeline links
+            pipeLinks.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            navigator.clipboard.writeText(_openLinks.map(g => g.link).join('\n'));
+            toast('Đã copy vào clipboard!', 'success');
+        }
+    });
+})();
+
+
+// ════════════════════════════════════════════════════════════════
+// FULL AUTO: Open Chat Pipeline Orchestrator
+// Flow: Scan links → Lọc mở chat → Join (tất cả TK) → Harvest members → Multi-account DM
+// ════════════════════════════════════════════════════════════════
+(function initFullAutoOpenChat() {
+    const $ = id => document.getElementById(id);
+    const ipc = window.electronAPI || window.electron?.ipcRenderer;
+    let _stopRequested = false;
+    let _running = false;
+
+    function autoLog(msg, type = 'info') {
+        const el = $('openChatAutoLog');
+        if (!el) return;
+        el.style.display = 'block';
+        const colors = { info: '#a3b3cc', ok: '#10b981', err: '#ef4444', warn: '#f59e0b', head: '#a78bfa' };
+        const div = document.createElement('div');
+        div.style.color = colors[type] || colors.info;
+        div.textContent = '[' + new Date().toLocaleTimeString('vi') + '] ' + msg;
+        el.appendChild(div);
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    $('btnStopOpenChat')?.addEventListener('click', () => {
+        _stopRequested = true;
+        autoLog('⛔ Yêu cầu dừng...', 'err');
+    });
+
+    $('btnFullAutoOpenChat')?.addEventListener('click', async () => {
+        if (_running) return;
+
+        const raw = $('scanGroupLinks')?.value || '';
+        const links = raw.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+        if (links.length === 0) { alert('Nhập ít nhất 1 link nhóm để Scan!'); return; }
+
+        // Get cookie + account pool
+        const primaryCookie = S.cookie || (await ipc?.invoke('store:get', 'cookie'));
+        if (!primaryCookie && !S.loggedIn) {
+            alert('Cần đăng nhập tài khoản chính trước!');
+            return;
+        }
+        const pool = (await ipc?.invoke('store:get', 'settingsPool')) || [];
+        const allCookies = [primaryCookie, ...pool.map(t => t.cookie)].filter(Boolean);
+        const allAccounts = [
+            { name: S.account?.name || 'TK Chính', cookie: primaryCookie },
+            ...pool.map(t => ({ name: t.name || t.uid || 'TK Phụ', cookie: t.cookie }))
+        ];
+
+        // Get message from repo or pipeline
+        const msgs = (await ipc?.invoke('store:get', 'settingsMsgs')) || [];
+        const baseMsg = msgs.length > 0 ? msgs[0] : ($('pipeGroupLinks') ? '' : '');
+        if (!baseMsg) {
+            const input = prompt('Nhập tin nhắn muốn gửi đến thành viên:');
+            if (!input) return;
+        }
+
+        _running = true;
+        _stopRequested = false;
+        $('btnFullAutoOpenChat').disabled = true;
+        $('btnFullAutoOpenChat').textContent = '⏳ Đang chạy...';
+        $('btnStopOpenChat').style.display = '';
+        $('openChatAutoLog').innerHTML = '';
+        $('openChatAutoLog').style.display = 'block';
+
+        autoLog('═══ BẮT ĐẦU FULL AUTO OPEN CHAT ═══', 'head');
+        autoLog(`📊 ${links.length} links | ${allAccounts.length} tài khoản | ${msgs.length} tin nhắn`, 'info');
+
+        try {
+            // ─── BƯỚC 1: SCAN NHÓM MỞ CHAT ───
+            autoLog('🔍 [BƯỚC 1] Scan nhóm mở chat...', 'head');
+            let openGroupLinks = [];
+            try {
+                const parseId = link => {
+                    const m = link.match(/zalo\.me\/g\/(\w+)/i) || link.match(/([a-z0-9]{6,20})$/i);
+                    return m ? m[1] : link;
+                };
+                const groupIds = links.map(parseId);
+                const scanResult = await ipc?.invoke('zalo:checkGroupChatStatus', primaryCookie, groupIds);
+                // FIX: checkGroupChatStatus returns array with field 'isOpenChat'
+                const statusList = Array.isArray(scanResult) ? scanResult : (scanResult?.results || []);
+                statusList.forEach((r, i) => {
+                    if (r.isOpenChat === true || r.openChat === true || r.chatEnabled === true) {
+                        // Map back to original link
+                        openGroupLinks.push(links[i] || r.groupId);
+                    }
+                });
+                if (openGroupLinks.length === 0) openGroupLinks = links; // fallback nếu không có nhóm mở
+                autoLog(`✅ Tìm thấy ${openGroupLinks.length}/${links.length} nhóm mở chat`, 'ok');
+            } catch(e) {
+                openGroupLinks = links;
+                autoLog('⚠️ Scan lỗi, dùng tất cả link: ' + e.message, 'warn');
+            }
+            if (_stopRequested) throw new Error('STOP');
+            if (openGroupLinks.length === 0) {
+                autoLog('❌ Không có nhóm mở chat nào!', 'err');
+                throw new Error('NO_OPEN_GROUPS');
+            }
+
+            // ─── BƯỚC 2: TẤT CẢ TK JOIN VÀO NHÓM MỞ ───
+            autoLog(`📥 [BƯỚC 2] ${allAccounts.length} TK join ${openGroupLinks.length} nhóm...`, 'head');
+            const joinedGroupIds = new Set();
+            for (let ai = 0; ai < allAccounts.length; ai++) {
+                if (_stopRequested) throw new Error('STOP');
+                const acct = allAccounts[ai];
+                autoLog(`  TK [${ai+1}/${allAccounts.length}] ${acct.name} đang join...`);
+                try {
+                    const joinResult = await ipc?.invoke('zalo:autoJoinGroups', [acct.cookie], openGroupLinks);
+                    const ok = joinResult?.joined?.length || 0;
+                    const already = joinResult?.alreadyIn?.length || 0;
+                    const fail = joinResult?.failed?.length || 0;
+                    autoLog(`    ✅ Join OK: ${ok} | Đã có: ${already} | Lỗi: ${fail}`, ok + already > 0 ? 'ok' : 'warn');
+                    // Collect group IDs from join results (FIX: check multiple field names)
+                    [...(joinResult?.joined || []), ...(joinResult?.alreadyIn || [])].forEach(g => {
+                        const gid = g.groupId || g.id || g.group_id;
+                        if (gid) joinedGroupIds.add(String(gid));
+                    });
+                } catch(e) {
+                    autoLog(`    ❌ ${acct.name}: ${e.message}`, 'err');
+                }
+                await sleep(2000 + Math.random() * 2000);
+            }
+            autoLog(`📥 Tổng: đã vào ${joinedGroupIds.size} nhóm`, 'ok');
+            if (_stopRequested) throw new Error('STOP');
+
+            // ─── BƯỚC 3: HARVEST MEMBERS ───
+            autoLog('📡 [BƯỚC 3] Lấy danh sách thành viên...', 'head');
+            const allMembers = new Map(); // uid → { uid, name, phone }
+            const targetGroupIds = joinedGroupIds.size > 0
+                ? [...joinedGroupIds]
+                : openGroupLinks.map(l => { const m = l.match(/zalo\.me\/g\/(\w+)/i); return m ? m[1] : l; });
+
+            for (const groupId of targetGroupIds) {
+                if (_stopRequested) throw new Error('STOP');
+                try {
+                    const members = await ipc?.invoke('zalo:getGroupMembers', primaryCookie, groupId);
+                    // FIX: getGroupMembers may return { success, members } or raw array
+                    const memberArr = Array.isArray(members) ? members : (members?.members || []);
+                    if (memberArr.length > 0) {
+                        memberArr.forEach(m => {
+                            const uid = String(m.uid || m.userId || m.id || '');
+                            if (uid && uid.length > 2) allMembers.set(uid, {
+                                uid,
+                                name: m.name || m.displayName || m.zaloName || '',
+                                phone: m.phone || ''
+                            });
+                        });
+                        autoLog(`  Nhóm ${groupId}: +${members.length} thành viên (tổng: ${allMembers.size})`, 'ok');
+                    }
+                } catch(e) {
+                    autoLog(`  ⚠️ Nhóm ${groupId}: ${e.message}`, 'warn');
+                }
+                await sleep(1500);
+            }
+            const memberList = [...allMembers.values()];
+            autoLog(`📡 Harvest xong: ${memberList.length} thành viên unique`, 'ok');
+            if (memberList.length === 0) {
+                autoLog('⚠️ Không harvest được thành viên nào. Có thể cần join nhóm trước.', 'warn');
+                throw new Error('NO_MEMBERS');
+            }
+            if (_stopRequested) throw new Error('STOP');
+
+            // ─── BƯỚC 4: CHIA TK GỬI LUÂN PHIÊN ───
+            autoLog(`🚀 [BƯỚC 4] ${allAccounts.length} TK gửi ${memberList.length} thành viên...`, 'head');
+            const chunkSize = Math.ceil(memberList.length / allAccounts.length);
+            autoLog(`  Mỗi TK đảm nhận ~${chunkSize} người`, 'info');
+
+            const activeMsg = msgs.length > 0 ? msgs[Math.floor(Math.random() * msgs.length)] : baseMsg;
+
+            for (let ai = 0; ai < allAccounts.length; ai++) {
+                if (_stopRequested) throw new Error('STOP');
+                const acct = allAccounts[ai];
+                const myChunk = memberList.slice(ai * chunkSize, (ai + 1) * chunkSize);
+                if (myChunk.length === 0) continue;
+
+                autoLog(`  🔵 ${acct.name}: gửi ${myChunk.length} người...`, 'info');
+
+                // Convert members to phones/UIDs for sendBulkSmart
+                const phones = myChunk.map(m => m.phone || m.uid).filter(Boolean);
+                const uids = myChunk.map(m => m.uid).filter(Boolean);
+
+                try {
+                    // FIX: sendBulkSmart with uid inputType (now supported) + names for persona
+                    const names = myChunk.map(m => m.name || '');
+                    await ipc?.invoke('zalo:sendBulkSmart', acct.cookie, {
+                        inputType: 'uid',
+                        uids: uids,
+                        names: names,
+                        message: activeMsg,
+                        delayMs: 4000,
+                        maxPerHour: 60,
+                        randomDelay: true,
+                        stopOnFail: false,
+                        enableSmartSend: true,
+                    });
+                    autoLog(`    ✅ ${acct.name}: hoàn thành ${myChunk.length} người`, 'ok');
+                } catch(e) {
+                    autoLog(`    ❌ ${acct.name}: ${e.message}`, 'err');
+                }
+                // Brief pause between accounts
+                if (ai < allAccounts.length - 1) await sleep(3000);
+            }
+            autoLog('═══ HOÀN THÀNH FULL AUTO ═══', 'head');
+            autoLog(`✅ Đã gửi đến ${memberList.length} thành viên từ ${openGroupLinks.length} nhóm mở chat`, 'ok');
+            toast(`Full Auto hoàn thành! ${memberList.length} thành viên đã được tiếp cận.`, 'success');
+
+        } catch(e) {
+            if (e.message !== 'STOP' && e.message !== 'NO_OPEN_GROUPS' && e.message !== 'NO_MEMBERS') {
+                autoLog('❌ Lỗi: ' + e.message, 'err');
+            }
+        } finally {
+            _running = false;
+            _stopRequested = false;
+            const btn = $('btnFullAutoOpenChat');
+            if (btn) { btn.disabled = false; btn.textContent = '⚡ Full Auto: Scan→Join→DM'; }
+            $('btnStopOpenChat').style.display = 'none';
+        }
+    });
+})();
+
+// ════════════════════════════════════════════════════════════════
+// POST-LOGIN SYNC — Trigger syncPipeline sau khi đăng nhập QR
+// ════════════════════════════════════════════════════════════════
+(function initPostLoginSync() {
+    // 1. Delayed re-sync sau 2.5s (electronAPI ready, store populated)
+    setTimeout(() => {
+        if (window.syncPipelineFromSettings) window.syncPipelineFromSettings();
+    }, 2500);
+
+    // 2. Listen loginSuccess event từ main process sau QR scan
+    try {
+        if (window.electron && window.electron.onLoginSuccess) {
+            window.electron.onLoginSuccess(function(data) {
+                setTimeout(() => {
+                    if (window.syncPipelineFromSettings) window.syncPipelineFromSettings();
+                }, 600);
+            });
+        }
+    } catch(e) {}
+
+    // 3. Poll cookie store mỗi 8s — nếu thay đổi thì sync
+    var _lastCookie = null;
+    setInterval(async function() {
+        try {
+            var ipc = window.electronAPI || (window.electron && window.electron.ipcRenderer);
+            if (!ipc) return;
+            var cookie = await ipc.invoke('store:get', 'cookie');
+            if (cookie && cookie !== _lastCookie) {
+                _lastCookie = cookie;
+                if (window.syncPipelineFromSettings) window.syncPipelineFromSettings();
+            }
+        } catch(_) {}
+    }, 8000);
+})();
+
+// ════════════════════════════════════════════════════════════════
+// PIPELINE SYNC v2 — Override với S.cookie fallback hoàn chỉnh
+// ════════════════════════════════════════════════════════════════
+(function initPipelineSyncV2() {
+    const ipc = window.electronAPI || (window.electron && window.electron.ipcRenderer);
+    const get = async (k) => {
+        try { return ipc ? await ipc.invoke('store:get', k) : null; } catch(_) { return null; }
+    };
+
+    async function syncFromSettings() {
+        // FIX: Check cả cookie LẪN loggedIn state (QR login có thể không có cookie thật)
+        const storedCookie = await get('cookie');
+        const storedLoggedIn = await get('loggedIn');
+        const primaryCookie = storedCookie || (typeof S !== 'undefined' ? S.cookie : null);
+        const storedAcct = await get('connectedAccount');
+        const primaryAcct = storedAcct || (typeof S !== 'undefined' ? S.account : null);
+        const isLoggedIn = !!(primaryCookie || storedLoggedIn || (typeof S !== 'undefined' && S.loggedIn));
+        const pool = (await get('settingsPool')) || [];
+        const msgs = (await get('settingsMsgs')) || [];
+        const tg = (await get('telegramSettings')) || {};
+
+        const $ = id => document.getElementById(id);
+
+        // ── 1. Tài khoản ──
+        const allAccounts = [];
+        if (isLoggedIn) {
+            const acct = primaryAcct || { name: 'Tài khoản chính (QR)', uid: '' };
+            allAccounts.push({ ...acct, cookie: primaryCookie || 'QR_ACTIVE', isPrimary: true });
+        }
+        pool.forEach(tk => allAccounts.push({ ...tk, isPrimary: false }));
+
+        const badge = $('pipeAcctCount');
+        if (badge) badge.textContent = allAccounts.length + ' TK';
+
+        const display = $('pipeAcctDisplay');
+        if (display) {
+            if (allAccounts.length === 0) {
+                display.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa đăng nhập — vào <b>Cài Đặt</b> để đăng nhập QR</div>';
+            } else {
+                display.innerHTML = allAccounts.map((tk, i) => `
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid ${tk.isPrimary?'rgba(102,126,234,0.3)':'var(--card-border)'}">
+                        <div style="width:28px;height:28px;border-radius:50%;background:${tk.isPrimary?'linear-gradient(135deg,#10b981,#059669)':'linear-gradient(135deg,#667eea,#764ba2)'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px">${(tk.name||'Z')[0].toUpperCase()}</div>
+                        <div style="flex:1">
+                            <span style="font-size:12px;font-weight:600">${tk.name||'TK '+(i+1)}</span>
+                            ${tk.isPrimary?'<span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:1px 5px;border-radius:4px;margin-left:4px">Chính</span>':''}
+                        </div>
+                        <span style="font-size:10px;color:#10b981">✓ Sẵn sàng</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Auto-inject cookies vào hidden field
+        if (allAccounts.length > 0) {
+            const pipeArea = $('pipeCookies');
+            if (pipeArea) pipeArea.value = allAccounts.map(t => t.cookie).filter(Boolean).join('\n');
+        }
+
+        // ── 2. Kho tin nhắn ──
+        const msgList = $('pipeMsgList');
+        const msgBadge = $('pipeMsgCount');
+        if (msgBadge) msgBadge.textContent = msgs.length + ' tin';
+        if (msgList) {
+            if (msgs.length === 0) {
+                msgList.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa có tin nhắn — thêm tại <b>Cài Đặt → Kho Tin Nhắn</b></div>';
+            } else {
+                msgList.innerHTML = msgs.map((msg,i) => `<div style="display:flex;gap:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border)"><span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;flex-shrink:0">#${i+1}</span><span style="font-size:12px;line-height:1.5;color:var(--text-h)">${msg}</span></div>`).join('');
+            }
+        }
+
+        // ── 3. Telegram status ──
+        const tgStatus = $('pipeTgStatus');
+        if (tgStatus) {
+            if (tg.token && tg.chatId) {
+                tgStatus.innerHTML = '<span style="color:#10b981;font-weight:600">✅ Đã kết nối Telegram</span>';
+            } else {
+                tgStatus.innerHTML = '<span style="color:var(--text-muted)">Chưa cấu hình — vào <b>Cài Đặt → Telegram</b></span>';
+            }
+        }
+
+        // ── 4. Auto-inject msgs ──
+        const msgInput = $('pipeGroupMsg') || $('pipeMessage') || $('pipeMsg');
+        if (msgInput && !msgInput.value.trim() && msgs.length > 0) {
+            msgInput.value = msgs[0];
+        }
+    }
+
+    // Override window.syncPipelineFromSettings
+    window.syncPipelineFromSettings = syncFromSettings;
+
+    // Chạy ngay
+    setTimeout(syncFromSettings, 500);
+    setTimeout(syncFromSettings, 2000); // Retry sau 2s
+
+    // Chạy khi navigate sang pipeline
+    document.addEventListener('click', function(e) {
+        const nav = e.target.closest('[data-page]');
+        if (nav && nav.dataset.page === 'pipeline') {
+            setTimeout(syncFromSettings, 200);
+        }
+    });
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// GỬI TIN NHẮN VÀO NHÓM (group chat thread)
+// ══════════════════════════════════════════════════════════════════
+window.sendMsgToGroupChat = async function(groupId) {
+    if (!S.loggedIn) { toast('Vui lòng đăng nhập trước!', 'error'); navigate('settings'); return; }
+    const group = S.groups.find(g => g.id === groupId);
+    const groupName = group ? group.name : groupId;
+
+    const msg = prompt('Gửi tin vào chat nhóm "' + groupName + '"\n(Tin nhắn xuất hiện trong khung chat nhóm)\n\nNhập nội dung:');
+    if (!msg || !msg.trim()) return;
+
+    const cookie = S.cookie;
+    log('info', '📣 Đang gửi tin vào chat nhóm "' + groupName + '"...', 'send');
+    navigate('bulk-send');
+
+    try {
+        const r = await el.zalo.sendGroupMessage(cookie, groupId, msg.trim());
+        if (r.success) {
+            log('success', '✅ Đã gửi tin vào nhóm "' + groupName + '"', 'send');
+            toast('✅ Đã gửi tin vào nhóm "' + groupName + '"', 'success');
+        } else {
+            log('error', '❌ Lỗi: ' + r.error, 'send');
+            toast('❌ Gửi thất bại: ' + r.error, 'error');
+        }
+    } catch(e) {
+        log('error', '❌ Lỗi: ' + e.message, 'send');
+        toast('Lỗi: ' + e.message, 'error');
+    }
+};
+
+// Gửi tin vào tất cả nhóm đã chọn
+window.sendMsgToAllSelectedGroups = async function() {
+    if (!S.loggedIn) { toast('Vui lòng đăng nhập trước!', 'error'); navigate('settings'); return; }
+    const groupIds = [...S.selectedGroups];
+    if (groupIds.length === 0) { toast('Chưa chọn nhóm nào! Click vào nhóm để chọn.', 'warning'); return; }
+
+    const msg = prompt('Gửi tin vào ' + groupIds.length + ' nhóm đã chọn:\n\nNhập nội dung:');
+    if (!msg || !msg.trim()) return;
+
+    const cookie = S.cookie;
+    navigate('bulk-send');
+    log('info', '📣 Gửi tin vào ' + groupIds.length + ' nhóm...', 'send');
+
+    let ok = 0, fail = 0;
+    for (let i = 0; i < groupIds.length; i++) {
+        const gid = groupIds[i];
+        const group = S.groups.find(g => g.id === gid);
+        const name = group ? group.name : gid;
+        try {
+            const r = await el.zalo.sendGroupMessage(cookie, gid, msg.trim());
+            if (r.success) { ok++; log('success', '✅ [' + (i+1) + '/' + groupIds.length + '] ' + name, 'send'); }
+            else { fail++; log('error', '❌ [' + (i+1) + '/' + groupIds.length + '] ' + name + ': ' + r.error, 'send'); }
+        } catch(e) {
+            fail++;
+            log('error', '❌ [' + (i+1) + '/' + groupIds.length + '] ' + name + ': ' + e.message, 'send');
+        }
+        if (i < groupIds.length - 1) await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+    }
+    log('success', '🎉 Xong: ' + ok + ' OK, ' + fail + ' lỗi', 'send');
+    toast('Gửi nhóm: ' + ok + ' OK / ' + fail + ' lỗi', fail === 0 ? 'success' : 'warning');
+};
+
+
+// ════════════════════════════════════════════════════════════════
+// PIPELINE SYNC v2 — Override syncFromSettings with loggedIn check
+// ════════════════════════════════════════════════════════════════
+(function initPipelineSyncV2() {
+    const ipc = window.electronAPI || (window.electron && window.electron.ipcRenderer);
+    const get = async (k) => {
+        try { return ipc ? await ipc.invoke('store:get', k) : null; } catch(_) { return null; }
+    };
+    const store = {
+        get: k => get(k),
+        set: (k, v) => { try { return ipc ? ipc.invoke('store:set', k, v) : null; } catch(_) { return null; } }
+    };
+
+    async function syncFromSettings() {
+        // FIX: Check cả cookie LẪN loggedIn state (QR login có thể không có cookie thật)
+        const storedCookie = await get('cookie');
+        const storedLoggedIn = await get('loggedIn');
+        const primaryCookie = storedCookie || (typeof S !== 'undefined' ? S.cookie : null);
+        const storedAcct = await get('connectedAccount');
+        const primaryAcct = storedAcct || (typeof S !== 'undefined' ? S.account : null);
+        const isLoggedIn = !!(primaryCookie || storedLoggedIn || (typeof S !== 'undefined' && S.loggedIn));
+        const pool = (await get('settingsPool')) || [];
+        const msgs = (await get('settingsMsgs')) || [];
+        const tg = (await get('telegramSettings')) || {};
+
+        const $ = id => document.getElementById(id);
+
+        // ── 1. Tài khoản ──
+        const allAccounts = [];
+        if (isLoggedIn) {
+            const acct = primaryAcct || { name: 'Tài khoản chính (QR)', uid: '' };
+            allAccounts.push({ ...acct, cookie: primaryCookie || 'QR_ACTIVE', isPrimary: true });
+        }
+        pool.forEach(tk => allAccounts.push({ ...tk, isPrimary: false }));
+
+        const badge = $('pipeAcctCount');
+        if (badge) badge.textContent = allAccounts.length + ' TK';
+
+        const display = $('pipeAcctDisplay');
+        if (display) {
+            if (allAccounts.length === 0) {
+                display.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa đăng nhập — vào <b>Cài Đặt</b> để đăng nhập QR</div>';
+            } else {
+                display.innerHTML = allAccounts.map(function(tk, i) {
+                    var bgColor = tk.isPrimary ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#667eea,#764ba2)';
+                    var borderColor = tk.isPrimary ? 'rgba(102,126,234,0.3)' : 'var(--card-border)';
+                    var initial = (tk.name || 'Z')[0].toUpperCase();
+                    var label = tk.name || ('TK ' + (i + 1));
+                    var primaryBadge = tk.isPrimary ? '<span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:1px 5px;border-radius:4px;margin-left:4px">Chính</span>' : '';
+                    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid ' + borderColor + '">'
+                        + '<div style="width:28px;height:28px;border-radius:50%;background:' + bgColor + ';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px">' + initial + '</div>'
+                        + '<div style="flex:1"><span style="font-size:12px;font-weight:600">' + label + '</span>' + primaryBadge + '</div>'
+                        + '<span style="font-size:10px;color:#10b981">✓ Sẵn sàng</span>'
+                        + '</div>';
+                }).join('');
+            }
+        }
+
+        // Auto-inject cookies vào hidden field
+        if (allAccounts.length > 0) {
+            const pipeArea = $('pipeCookies');
+            if (pipeArea) pipeArea.value = allAccounts.map(t => t.cookie).filter(Boolean).join('\n');
+        }
+
+        // ── 2. Kho tin nhắn ──
+        const msgList = $('pipeMsgList');
+        const msgBadge = $('pipeMsgCount');
+        if (msgBadge) msgBadge.textContent = msgs.length + ' tin';
+        if (msgList) {
+            if (msgs.length === 0) {
+                msgList.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa có tin nhắn — thêm tại <b>Cài Đặt → Kho Tin Nhắn</b></div>';
+            } else {
+                msgList.innerHTML = msgs.map(function(msg, i) {
+                    var preview = msg.length > 80 ? msg.slice(0, 80) + '…' : msg;
+                    return '<div style="display:flex;gap:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border)">'
+                        + '<span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;flex-shrink:0">#' + (i+1) + '</span>'
+                        + '<span style="font-size:12px;line-height:1.5;color:var(--text-h)">' + preview + '</span>'
+                        + '</div>';
+                }).join('');
+            }
+        }
+
+        // ── 3. Telegram status ──
+        const tgStatus = $('pipeTgStatus');
+        if (tgStatus) {
+            if (tg.token && tg.chatId) {
+                tgStatus.innerHTML = '<span style="color:#10b981;font-weight:600">✅ Đã kết nối Telegram</span>';
+            } else {
+                tgStatus.innerHTML = '<span style="color:var(--text-muted)">Chưa cấu hình — vào <b>Cài Đặt → Telegram</b></span>';
+            }
+        }
+
+        // ── 4. Auto-inject msgs ──
+        const msgInput = $('pipeGroupMsg') || $('pipeMessage') || $('pipeMsg');
+        if (msgInput && !msgInput.value.trim() && msgs.length > 0) {
+            msgInput.value = msgs[0];
+        }
+    }
+
+    // Override window.syncPipelineFromSettings
+    window.syncPipelineFromSettings = syncFromSettings;
+
+    // Chạy ngay
+    setTimeout(syncFromSettings, 500);
+    setTimeout(syncFromSettings, 2000); // Retry sau 2s
+
+    // Chạy khi navigate sang pipeline
+    document.addEventListener('click', function(e) {
+        const nav = e.target.closest('[data-page]');
+        if (nav && nav.dataset.page === 'pipeline') {
+            setTimeout(syncFromSettings, 200);
+        }
+    });
+
+    // Chạy khi login thành công
+    window.addEventListener('zalo:loginSuccess_internal', function() {
+        setTimeout(syncFromSettings, 500);
+    });
+})();

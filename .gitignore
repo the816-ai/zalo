@@ -4,3 +4,7 @@ node_modules/
 *.cookie
 cookies/
 data.json
+
+dist/
+*.exe
+*setup.exe

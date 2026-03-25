@@ -1,7 +1,7 @@
 {
     "name": "zalo-bulk-tool",
-    "version": "2.1.0",
-    "description": "Zalo Bulk Tool Pro - Gửi tin & Kết bạn hàng loạt",
+    "version": "2.5.0",
+    "description": "Zalo Bulk Tool Pro V2 - Gửi tin & Kết bạn hàng loạt",
     "main": "main.js",
     "author": "ZaloBulk Pro",
     "license": "MIT",
@@ -12,17 +12,44 @@
         "build:win": "electron-builder --win"
     },
     "dependencies": {
-        "electron": "^28.3.3",
         "puppeteer-core": "^24.38.0",
-        "zca-js": "^2.1.1"
+        "zca-js": "^2.1.2"
     },
     "devDependencies": {
+        "electron": "^28.3.3",
         "electron-builder": "^24.13.3"
     },
     "build": {
         "appId": "com.zalobulk.pro",
         "productName": "Zalo Bulk Tool Pro",
         "copyright": "Copyright © 2025 ZaloBulk Pro",
+        "asar": true,
+        "asarUnpack": [
+            "node_modules/zca-js/**/*"
+        ],
+        "files": [
+            "main.js",
+            "preload.js",
+            "zalo-api.js",
+            "renderer/**/*",
+            "assets/**/*",
+            "node_modules/**/*",
+            "package.json",
+            "!node_modules/**/test/**",
+            "!node_modules/**/tests/**",
+            "!node_modules/**/*.md",
+            "!node_modules/**/LICENSE*",
+            "!node_modules/**/CHANGELOG*",
+            "!**/*.map",
+            "!**/*.ts"
+        ],
+        "extraResources": [
+            {
+                "from": "assets",
+                "to": "assets",
+                "filter": ["**/*"]
+            }
+        ],
         "directories": {
             "output": "dist"
         },
@@ -30,19 +57,27 @@
             "target": [
                 {
                     "target": "nsis",
-                    "arch": [
-                        "x64"
-                    ]
+                    "arch": ["x64"]
+                },
+                {
+                    "target": "portable",
+                    "arch": ["x64"]
                 }
             ],
-            "icon": "assets/icon.ico"
+            "icon": "assets/icon.png",
+            "signAndEditExecutable": false
         },
         "nsis": {
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
             "createDesktopShortcut": true,
             "createStartMenuShortcut": true,
-            "shortcutName": "Zalo Bulk Tool Pro"
+            "shortcutName": "Zalo Bulk Tool Pro",
+            "include": null,
+            "deleteAppDataOnUninstall": false
+        },
+        "portable": {
+            "artifactName": "ZaloBulkToolPro-${version}-Portable.exe"
         }
     }
 }
