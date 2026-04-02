@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /**
  * â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
  *  Zalo API Backend â€“ dÃ¹ng zca-js (Ä‘Ã£ reverse-engineer
@@ -719,6 +719,27 @@ async function sendFriendRequest(cookie, phone, message = '') {
     }
 }
 
+// ══════════════════════════════════════════════════════════════
+// 4b. KẾT BẠN BẰNG UID (không cần phone)
+// ══════════════════════════════════════════════════════════════
+async function sendFriendRequestByUid(cookie, uid, message = '') {
+    try {
+        const api = await getApi(cookie);
+        const msg = message || 'Xin chào! Mình muốn kết bạn với bạn 😊';
+        await api.sendFriendRequest(msg, uid);
+        return { success: true, uid };
+    } catch (err) {
+        const m = err.message || '';
+        if (m.includes('already') || m.includes('216')) {
+            return { success: false, error: 'already_friend', already: true };
+        }
+        if (m.includes('217') || m.includes('pending')) {
+            return { success: false, error: 'request_sent', pending: true };
+        }
+        return { success: false, error: m };
+    }
+}
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // 5. Láº¤Y DANH SÃCH NHÃ“M
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1227,7 +1248,7 @@ async function getGroupMembers(cookie, groupId) {
             : null;
 
         log(`SUCCESS: ${members.length} found / ${actualTotal} total (coverage ${Math.round(coverage * 100)}%)`);
-        const result = { success: true, groupName, totalMember: members.length, actualTotal, members, warning };
+        const result = { success: true, groupName, totalMember: members.length, actualTotal, members, warning, adminIds: g?.adminIds || [], creatorId: g?.creatorId || '' };
 
         // V2: Cache the result
         memberCache.set(groupId, result);
@@ -8252,6 +8273,7 @@ module.exports = {
     sendMessage,
     sendMessageByUid,
     sendFriendRequest,
+    sendFriendRequestByUid,
     getGroups,
     getGroupMembers,
     copyGroupMembers,

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 // ── Electron bridge ──────────────────────────────────────────────
 const el = window.electron || {
@@ -36,18 +36,8 @@ let sendTimer = null, frTimer = null;
 
 // ── Seed groups (matching reference image style) ─────────────────
 function seedGroups() {
-    S.groups = [
-        { id: '6452832425892012654', name: 'Học sáng', members: 4, created: '26/8/2025', unread: 0 },
-        { id: '2822888250360872399', name: 'Nguồn account claude cursor', members: 3, created: '4/2/2026', unread: 0 },
-        { id: '9162885645848436938', name: 'Nguyễn Duy Hiếu, Na, Bùi Ngọc Thanh Tuyền', members: 4, created: '8/1/2022', unread: 0 },
-        { id: '1641660326226688043', name: 'VẠN PHÚ KHÁNH – VA&TBGD', members: 8, created: '10/12/2025', unread: 0 },
-        { id: '2979096449077364916', name: 'Group Test', members: 3, created: '31/7/2025', unread: 0 },
-        { id: '6511288884669272492', name: 'Kim Su, Nguyễn Duy Hiếu, Phong', members: 2, created: '2/3/2022', unread: 0 },
-        { id: '9011712118946028531', name: 'VKU Học máy (8)', members: 60, created: '2/1/2025', unread: 0 },
-        { id: '4994848336572424367', name: 'Gọi Rồng Online Z (1 SAO) – Open 21H 22/1/2026', members: 147, created: '9/12/2025', unread: 2 },
-        { id: '1234567890123456789', name: 'Marketing Team Q1 2026', members: 12, created: '1/1/2026', unread: 5 },
-        { id: '9876543210987654321', name: 'Nhóm bán hàng online', members: 34, created: '15/6/2025', unread: 0 },
-    ];
+    // Bắt đầu rỗng — loadState() sẽ load nhóm thật từ Zalo API
+    S.groups = [];
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -211,6 +201,21 @@ window.toggleGroupSelect = function (id, el) {
 let _groupSendActive = false;
 let _groupSendStop = false;
 
+// ── Spin helper cấp module (dùng cho sendToGroupMembers) ──
+const _zwCharsGlobal = ['\u200b', '\u200c', '\u200d', '\ufeff'];
+function spinMsg(baseMsg, recipientName) {
+    let result = baseMsg;
+    result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+        var arr = opts.split('|');
+        return arr[Math.floor(Math.random() * arr.length)];
+    });
+    result = result.replace(/<Name>/gi, recipientName || 'bạn');
+    const pos = Math.floor(Math.random() * Math.max(1, result.length - 1)) + 1;
+    const zw = _zwCharsGlobal[Math.floor(Math.random() * _zwCharsGlobal.length)];
+    result = result.slice(0, pos) + zw + result.slice(pos);
+    return result;
+}
+
 window.sendToGroupMembers = async function (groupId) {
     if (!S.loggedIn) { toast('Vui lòng đăng nhập trước!', 'error'); navigate('settings'); return; }
 
@@ -250,7 +255,7 @@ window.sendToGroupMembers = async function (groupId) {
         const m = members[i];
         log('info', `[Đang gửi ${i + 1}/${members.length}] → ${m.name} (${m.uid})`, 'send');
         try {
-            const r = await el.zalo.sendMessageByUid(cookie, m.uid, msg);
+            const r = await el.zalo.sendMessageByUid(cookie, m.uid, spinMsg(msg, m.name));
             if (r.success) {
                 S.send.ok++;
                 log('success', `✅ Gửi OK → ${m.name}`, 'send');
@@ -756,8 +761,16 @@ async function startBulkSend() {
 
     // ── Message variation ──
     const INVISIBLE_CHARS = ['\u200b', '\u200c', '\u200d', '\ufeff'];
-    const variantMsg = (baseMsg) => {
+    const variantMsg = (baseMsg, recipientName) => {
         let result = baseMsg;
+        // Spin syntax {A|B|C} → chọn ngẫu nhiên
+        result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+            var arr = opts.split('|');
+            return arr[Math.floor(Math.random() * arr.length)];
+        });
+        // Thay <Name> bằng tên thật (nếu có) hoặc 'bạn'
+        result = result.replace(/<Name>/gi, recipientName || 'bạn');
+        // Invisible chars để mỗi tin unique
         const numChars = Math.floor(Math.random() * 2) + 1;
         for (let i = 0; i < numChars; i++) {
             const pos = Math.floor(Math.random() * result.length);
@@ -945,9 +958,16 @@ function doSendToMembers(members, groupName, cookie, msg) {
 
     // ── Message variation để tránh spam detection ──
     const INVISIBLE_CHARS = ['\u200b', '\u200c', '\u200d', '\ufeff']; // Zero-width chars
-    const variantMsg = (baseMsg) => {
-        // Random thêm 1-2 invisible chars vào vị trí ngẫu nhiên
+    const variantMsg = (baseMsg, recipientName) => {
         let result = baseMsg;
+        // Spin syntax {A|B|C} → chọn ngẫu nhiên
+        result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+            var arr = opts.split('|');
+            return arr[Math.floor(Math.random() * arr.length)];
+        });
+        // Thay <Name> bằng tên thật của người nhận
+        result = result.replace(/<Name>/gi, recipientName || 'bạn');
+        // Random thêm 1-2 invisible chars vào vị trí ngẫu nhiên
         const numChars = Math.floor(Math.random() * 2) + 1;
         for (let i = 0; i < numChars; i++) {
             const pos = Math.floor(Math.random() * result.length);
@@ -1036,7 +1056,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
             const retryUid = S.send.retryQueue.shift();
             const rm = members.find(m => m.uid === retryUid) || { uid: retryUid, name: retryUid.slice(-6) };
             log('warning', `🔄 Retry → ${rm.name}`, 'send');
-            el.zalo.sendMessageByUid(cookie, retryUid, variantMsg(msg)).then(r => {
+            el.zalo.sendMessageByUid(cookie, retryUid, variantMsg(msg, rm.name)).then(r => {
                 if (r.success) {
                     S.send.ok++; log('success', `✅ Retry OK → ${rm.name}`, 'send');
                     // Fix #8: count retry toward quota
@@ -1061,7 +1081,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
         log('info', `[📤 ${idx + 1}/${members.length} - ${pct}%] → ${m.name}`, 'send');
 
         // Variation message để tránh spam filter (nếu bật)
-        const msgToSend = useVariation ? variantMsg(msg) : msg;
+        const msgToSend = useVariation ? variantMsg(msg, m.name) : msg;
 
         el.zalo.sendMessageByUid(cookie, m.uid, msgToSend).then(r => {
             if (r.success) {
@@ -2601,29 +2621,28 @@ function initCopyGroup() {
 
     $('btnPoolLoginQR')?.addEventListener('click', async () => {
         showPoolQrModal();
-        try { await ipc?.invoke('zalo:loginQR'); }
+        try { await ipc?.invoke('zalo:poolLoginQR'); }
         catch(e) { if ($('poolQrStatus')) $('poolQrStatus').textContent = '❌ Lỗi: ' + e.message; }
     });
     $('btnPoolQrClose')?.addEventListener('click', () => hidePoolQrModal());
 
     // Nhận QR image
-    ipc?.on?.('zalo:qrReady', (_ev, dataUrl) => {
+    ipc?.on?.('zalo:poolQrReady', (_ev, dataUrl) => {
         if (!_poolQrActive) return;
         if ($('poolQrImg')) $('poolQrImg').innerHTML = '<img src="' + dataUrl + '" style="width:190px;height:190px;border-radius:8px;object-fit:contain" />';
         if ($('poolQrStatus')) $('poolQrStatus').textContent = 'Quét QR bằng điện thoại TK phụ...';
     });
 
     // Nhận kết quả đăng nhập thành công
-    ipc?.on?.('zalo:loginSuccess', async (_ev, data) => {
+    ipc?.on?.('zalo:poolLoginSuccess', async (_ev, data) => {
         if (!_poolQrActive || !data?.success) return;
         const status = $('poolQrStatus');
         if (status) { status.textContent = '✅ Đăng nhập thành công!'; status.style.color = '#10b981'; }
         try {
-            const cookie = await ipc.invoke('store:get', 'cookie');
-            if (!cookie) throw new Error('Không lấy được cookie');
-            const info = await ipc.invoke('zalo:verify', cookie);
-            const uid = info?.user?.uid || ('pool_' + Date.now());
-            const name = info?.user?.name || ('TK ' + (Date.now() % 1000));
+            const cookie = data.cookie;
+            if (!cookie) throw new Error('Không lấy được cookie TK phụ');
+            const uid = data.uid || ('pool_' + Date.now());
+            const name = data.name || ('TK ' + (Date.now() % 1000));
             const settingsPool = (await ipc.invoke('store:get', 'settingsPool')) || [];
             if (!settingsPool.some(tk => tk.uid === uid)) {
                 settingsPool.push({ cookie, name, uid, addedAt: Date.now() });
@@ -2635,6 +2654,12 @@ function initCopyGroup() {
         } catch(e) {
             if (status) { status.textContent = '❌ ' + e.message; status.style.color = '#ef4444'; }
         }
+    });
+
+    ipc?.on?.('zalo:poolLoginError', (_ev, err) => {
+        if (!_poolQrActive) return;
+        const status = $('poolQrStatus');
+        if (status) { status.textContent = '❌ ' + err; status.style.color = '#ef4444'; }
     });
 
     window.addEventListener('pool:refresh', async () => {

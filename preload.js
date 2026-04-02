@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electron', {
     zalo: {
         verify: (cookie) => ipcRenderer.invoke('zalo:verify', cookie),
         loginQR: () => ipcRenderer.invoke('zalo:loginQR'),
+        poolLoginQR: () => ipcRenderer.invoke('zalo:poolLoginQR'),
         getGroups: (cookie) => ipcRenderer.invoke('zalo:getGroups', cookie),
         getGroupMembers: (cookie, groupId) => ipcRenderer.invoke('zalo:getGroupMembers', cookie, groupId),
         sendMessage: (cookie, phone, msg) => ipcRenderer.invoke('zalo:sendMessage', cookie, phone, msg),
@@ -25,6 +26,7 @@ contextBridge.exposeInMainWorld('electron', {
         sendGroupMessageBulk: (cookie, groupIds, message, delay) => ipcRenderer.invoke('zalo:sendGroupMessageBulk', cookie, groupIds, message, delay),
         sendMessageByUid: (cookie, uid, msg) => ipcRenderer.invoke('zalo:sendMessageByUid', cookie, uid, msg),
         sendFriendRequest: (cookie, phone, msg) => ipcRenderer.invoke('zalo:sendFriendRequest', cookie, phone, msg),
+        sendFriendRequestByUid: (cookie, uid, msg) => ipcRenderer.invoke('zalo:sendFriendRequestByUid', cookie, uid, msg),
         findUser: (cookie, phone) => ipcRenderer.invoke('zalo:findUser', cookie, phone),
         copyGroupMembers: (cookie, srcId, tgtId, opts) => ipcRenderer.invoke('zalo:copyGroupMembers', cookie, srcId, tgtId, opts),
         copyHydra: (cookie, srcId, tgtId, opts) => ipcRenderer.invoke('zalo:copyHydra', cookie, srcId, tgtId, opts),
@@ -35,6 +37,7 @@ contextBridge.exposeInMainWorld('electron', {
         // ── Account Pool ──
         poolAdd: (cookie, name, uid) => ipcRenderer.invoke('zalo:accountPool:add', cookie, name, uid),
         poolGetAll: () => ipcRenderer.invoke('zalo:accountPool:getAll'),
+        poolGetCookie: (uid) => ipcRenderer.invoke('zalo:accountPool:getCookie', uid),
         poolRemove: (uid) => ipcRenderer.invoke('zalo:accountPool:remove', uid),
         poolSetGroupMapping: (uid, sourceGroupId, destGroupIds) => ipcRenderer.invoke('zalo:accountPool:setGroupMapping', uid, sourceGroupId, destGroupIds),
         getGroupsForAccount: (cookie) => ipcRenderer.invoke('zalo:getGroupsForAccount', cookie),
@@ -72,10 +75,10 @@ contextBridge.exposeInMainWorld('electron', {
     // ── Raw IPC passthrough (Bug13 fix: restricted allowlist) ──
     ipcRenderer: {
         invoke: (channel, ...args) => {
-            const allowed = ['zalo:runFullPipeline','zalo:cancelPipeline','zalo:autoJoinGroups',
-                'zalo:checkGroupChatStatus','zalo:accountPool:getAll','zalo:sendBulkSmart',
-                'zalo:cancelBulkSend','store:get','store:getAll','store:set',
-                'zalo:sendGroupMessage','zalo:sendGroupMessageBulk'];
+            const allowed = ['zalo:runFullPipeline', 'zalo:cancelPipeline', 'zalo:autoJoinGroups',
+                'zalo:checkGroupChatStatus', 'zalo:accountPool:getAll', 'zalo:sendBulkSmart',
+                'zalo:cancelBulkSend', 'store:get', 'store:getAll', 'store:set',
+                'zalo:sendGroupMessage', 'zalo:sendGroupMessageBulk'];
             if (!allowed.includes(channel)) {
                 console.warn('[SECURITY] Blocked raw invoke:', channel);
                 return Promise.resolve({ error: 'Channel not allowed' });

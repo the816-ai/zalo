@@ -108,10 +108,37 @@
 
                 <a class="nav-item" data-page="pipeline" onclick="navigate('pipeline')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                     </svg>
                     <span>Auto Pipeline</span>
                     <span class="nav-badge" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">SMART</span>
+                </a>
+
+                <a class="nav-item" data-page="autojoin" onclick="navigate('autojoin')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <polyline points="16 11 18 13 22 9" />
+                    </svg>
+                    <span>Auto Join</span>
+                    <span class="nav-badge" style="background:#f59e0b">NEW</span>
+                </a>
+
+                <a class="nav-item" data-page="dm" onclick="navigate('dm')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>Gửi DM</span>
+                    <span class="nav-badge" style="background:#10b981">NEW</span>
+                </a>
+
+                <a class="nav-item" data-page="nurture" onclick="navigate('nurture')">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                    </svg>
+                    <span>Trại Nuôi</span>
+                    <span class="nav-badge" style="background:#8b5cf6">PRO</span>
                 </a>
 
                 <div class="nav-sep"></div>
@@ -410,19 +437,23 @@
                 </div>
             </section>
 
-            
-                <!-- Hidden elements for renderer.js BulkSend logic -->
-                <div style="display:none" aria-hidden="true">
-                    <label><input type="checkbox" id="enableSmartSend" checked> Smart Send</label>
-                    <label><input type="checkbox" id="enableGroupInvite"> Group Invite</label>
-                    <div id="inviteGroupSelector">
-                        <select id="inviteGroupSelect"><option value="">Nhom 1</option></select>
-                        <select id="inviteGroupSelect2"><option value="">Nhom 2</option></select>
-                        <textarea id="msgGroup1"></textarea>
-                        <textarea id="msgGroup2"></textarea>
-                    </div>
-                    <div id="accountPoolList"></div>
+
+            <!-- Hidden elements for renderer.js BulkSend logic -->
+            <div style="display:none" aria-hidden="true">
+                <label><input type="checkbox" id="enableSmartSend" checked> Smart Send</label>
+                <label><input type="checkbox" id="enableGroupInvite"> Group Invite</label>
+                <div id="inviteGroupSelector">
+                    <select id="inviteGroupSelect">
+                        <option value="">Nhom 1</option>
+                    </select>
+                    <select id="inviteGroupSelect2">
+                        <option value="">Nhom 2</option>
+                    </select>
+                    <textarea id="msgGroup1"></textarea>
+                    <textarea id="msgGroup2"></textarea>
                 </div>
+                <div id="accountPoolList"></div>
+            </div>
             <!-- ══════ PAGE: TIN NHẮN ═════════════════════════════════ -->
             <section class="page" id="page-messages">
                 <div class="page-header">
@@ -678,58 +709,88 @@
                         <p class="page-sub">Cấu hình tài khoản và hệ thống</p>
                     </div>
                     <button class="btn-primary" id="btnSaveSettings">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width:15px;height:15px">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                            <polyline points="17 21 17 13 7 13 7 21" />
+                            <polyline points="7 3 7 8 15 8" />
+                        </svg>
                         Lưu cài đặt
                     </button>
                 </div>
 
                 <!-- Banner TK da ket noi -->
-                <div class="card" id="connectedAccountBanner" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.04));border:1.5px solid rgba(16,185,129,0.4)">
+                <div class="card" id="connectedAccountBanner"
+                    style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.04));border:1.5px solid rgba(16,185,129,0.4)">
                     <div style="display:flex;align-items:center;gap:14px">
-                        <div id="connAcctAvatar" style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:700;flex-shrink:0">Z</div>
+                        <div id="connAcctAvatar"
+                            style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:700;flex-shrink:0">
+                            Z</div>
                         <div style="flex:1;min-width:0">
                             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                                <span id="connAcctName" style="font-size:16px;font-weight:700;color:var(--text-h)">—</span>
-                                <span style="background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">✓ Đã kết nối</span>
+                                <span id="connAcctName"
+                                    style="font-size:16px;font-weight:700;color:var(--text-h)">—</span>
+                                <span
+                                    style="background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">✓
+                                    Đã kết nối</span>
                             </div>
-                            <div style="font-size:12px;color:var(--text-muted)">UID: <span id="connAcctUid">—</span> · Đăng nhập: <span id="connAcctTime">—</span></div>
+                            <div style="font-size:12px;color:var(--text-muted)">UID: <span id="connAcctUid">—</span> ·
+                                Đăng nhập: <span id="connAcctTime">—</span></div>
                         </div>
-                        <button id="btnDisconnectAcct" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-weight:600">Ngắt kết nối</button>
+                        <button id="btnDisconnectAcct"
+                            style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-weight:600">Ngắt
+                            kết nối</button>
                     </div>
                 </div>
 
                 <!-- Ket noi Zalo -->
                 <div class="card" id="loginSection">
                     <div class="settings-section-title">🔑 Kết nối Zalo</div>
-                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;padding:20px;margin-bottom:14px;color:#fff;text-align:center">
+                    <div
+                        style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;padding:20px;margin-bottom:14px;color:#fff;text-align:center">
                         <div style="font-size:18px;font-weight:700;margin-bottom:6px">📱 Đăng nhập bằng QR Code</div>
-                        <p style="font-size:12px;opacity:.9;margin:0 0 14px 0">Mở Zalo điện thoại → nhấn QR → quét mã. Không cần cookie!</p>
-                        <button id="btnLoginQR" style="background:#fff;color:#667eea;font-weight:700;border:none;border-radius:8px;padding:11px 24px;font-size:14px;cursor:pointer;width:100%">🔲 Quét QR để đăng nhập</button>
+                        <p style="font-size:12px;opacity:.9;margin:0 0 14px 0">Mở Zalo điện thoại → nhấn QR → quét mã.
+                            Không cần cookie!</p>
+                        <button id="btnLoginQR"
+                            style="background:#fff;color:#667eea;font-weight:700;border:none;border-radius:8px;padding:11px 24px;font-size:14px;cursor:pointer;width:100%">🔲
+                            Quét QR để đăng nhập</button>
                     </div>
                     <details>
-                        <summary style="cursor:pointer;color:#888;font-size:13px;padding:4px 0">⚙️ Dùng Cookie thủ công (nâng cao)</summary>
+                        <summary style="cursor:pointer;color:#888;font-size:13px;padding:4px 0">⚙️ Dùng Cookie thủ công
+                            (nâng cao)</summary>
                         <div style="margin-top:10px">
-                            <div class="form-row"><label>Cookie Zalo *</label><textarea id="cookieInput" class="big-textarea" style="min-height:70px" placeholder="Dán toàn bộ cookie Zalo vào đây..."></textarea></div>
-                            <div class="form-row"><label>IMEI (tuỳ chọn)</label><input type="text" id="imeiInput" class="text-field" placeholder="IMEI từ Local Storage" /></div>
+                            <div class="form-row"><label>Cookie Zalo *</label><textarea id="cookieInput"
+                                    class="big-textarea" style="min-height:70px"
+                                    placeholder="Dán toàn bộ cookie Zalo vào đây..."></textarea></div>
+                            <div class="form-row"><label>IMEI (tuỳ chọn)</label><input type="text" id="imeiInput"
+                                    class="text-field" placeholder="IMEI từ Local Storage" /></div>
                             <button class="btn-primary" id="btnLoginSubmit">→ Xác thực &amp; Kết nối</button>
                         </div>
                     </details>
-                    <p style="margin:8px 0 0;font-size:12px"><a href="#" id="howToCookie">Xem hướng dẫn lấy cookie</a></p>
+                    <p style="margin:8px 0 0;font-size:12px"><a href="#" id="howToCookie">Xem hướng dẫn lấy cookie</a>
+                    </p>
                 </div>
 
                 <!-- Quan ly Account Pool -->
                 <div class="card">
-                    <div class="settings-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                    <div class="settings-section-title"
+                        style="display:flex;align-items:center;justify-content:space-between">
                         <span>👥 Quản lý tài khoản Pool</span>
                         <span class="count-badge" id="settingsPoolCount">0 TK</span>
                     </div>
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Thêm nhiều TK để xoay vòng tự động — giảm nguy cơ bị ban. Mỗi TK có health score riêng.</div>
-                    <div id="settingsPoolList" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:10px">
-                        <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px;border:1px dashed var(--card-border);border-radius:8px">Chưa có tài khoản phụ nào</div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Thêm nhiều TK để xoay vòng tự
+                        động — giảm nguy cơ bị ban. Mỗi TK có health score riêng.</div>
+                    <div id="settingsPoolList"
+                        style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:10px">
+                        <div
+                            style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px;border:1px dashed var(--card-border);border-radius:8px">
+                            Chưa có tài khoản phụ nào</div>
                     </div>
                     <!-- 2 cach them TK phu -->
                     <div style="display:flex;gap:8px;margin-bottom:8px">
-                        <button class="btn-primary" id="btnPoolLoginQR" style="flex:1;padding:9px;font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg,#667eea,#764ba2)">🔲 Đăng nhập QR (TK phụ)</button>
+                        <button class="btn-primary" id="btnPoolLoginQR"
+                            style="flex:1;padding:9px;font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg,#667eea,#764ba2)">🔲
+                            Đăng nhập QR (TK phụ)</button>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                         <div style="flex:1;height:1px;background:var(--card-border)"></div>
@@ -737,58 +798,88 @@
                         <div style="flex:1;height:1px;background:var(--card-border)"></div>
                     </div>
                     <div style="display:flex;gap:8px">
-                        <input type="text" id="settingsPoolCookie" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px" placeholder="Dán cookie tài khoản phụ..." />
-                        <input type="text" id="settingsPoolName" style="width:100px;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px" placeholder="Tên TK" />
-                        <button class="btn-primary" id="btnSettingsPoolAdd" style="padding:8px 14px;white-space:nowrap">➕ Thêm</button>
+                        <input type="text" id="settingsPoolCookie"
+                            style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px"
+                            placeholder="Dán cookie tài khoản phụ..." />
+                        <input type="text" id="settingsPoolName"
+                            style="width:100px;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px"
+                            placeholder="Tên TK" />
+                        <button class="btn-primary" id="btnSettingsPoolAdd"
+                            style="padding:8px 14px;white-space:nowrap">➕ Thêm</button>
                     </div>
                 </div>
 
                 <!-- Modal QR dang nhap TK phu -->
-                <div id="poolQrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:none;align-items:center;justify-content:center">
-                    <div style="background:var(--bg-card);border-radius:16px;padding:28px;max-width:340px;width:90%;text-align:center;border:1px solid var(--card-border)">
+                <div id="poolQrModal"
+                    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:none;align-items:center;justify-content:center">
+                    <div
+                        style="background:var(--bg-card);border-radius:16px;padding:28px;max-width:340px;width:90%;text-align:center;border:1px solid var(--card-border)">
                         <div style="font-size:16px;font-weight:700;margin-bottom:6px">🔲 Quét QR cho TK phụ</div>
-                        <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px">Mở Zalo điện thoại của tài khoản định thêm → quét QR</p>
-                        <div id="poolQrImg" style="margin:0 auto 14px;width:200px;height:200px;background:rgba(255,255,255,0.06);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">⏳ Đang tạo QR...</div>
-                        <div id="poolQrStatus" style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Đợi quét mã...</div>
-                        <button id="btnPoolQrClose" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:7px 20px;cursor:pointer;font-size:13px">Hủy</button>
+                        <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px">Mở Zalo điện thoại của tài
+                            khoản định thêm → quét QR</p>
+                        <div id="poolQrImg"
+                            style="margin:0 auto 14px;width:200px;height:200px;background:rgba(255,255,255,0.06);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">
+                            ⏳ Đang tạo QR...</div>
+                        <div id="poolQrStatus" style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Đợi
+                            quét mã...</div>
+                        <button id="btnPoolQrClose"
+                            style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:7px 20px;cursor:pointer;font-size:13px">Hủy</button>
                     </div>
                 </div>
 
                 <!-- Telegram -->
                 <div class="card">
                     <div class="settings-section-title">📢 Telegram Thông Báo</div>
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Nhận thông báo realtime khi gửi tin, bị ban, hoàn thành pipeline.</div>
-                    <div class="form-row inline"><label>Bot Token</label><input type="text" id="settingsTgToken" class="text-field" placeholder="123456:ABC-DEF..." /></div>
-                    <div class="form-row inline"><label>Chat ID</label><input type="text" id="settingsTgChatId" class="text-field" placeholder="-100xxxxxxx" /></div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Nhận thông báo realtime khi
+                        gửi tin, bị ban, hoàn thành pipeline.</div>
+                    <div class="form-row inline"><label>Bot Token</label><input type="text" id="settingsTgToken"
+                            class="text-field" placeholder="123456:ABC-DEF..." /></div>
+                    <div class="form-row inline"><label>Chat ID</label><input type="text" id="settingsTgChatId"
+                            class="text-field" placeholder="-100xxxxxxx" /></div>
                     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-                        <button class="btn-primary" id="btnTestTelegram" style="padding:6px 16px;font-size:12px">📤 Test gửi</button>
+                        <button class="btn-primary" id="btnTestTelegram" style="padding:6px 16px;font-size:12px">📤 Test
+                            gửi</button>
                         <span id="tgTestResult" style="font-size:12px;color:var(--text-muted)"></span>
                     </div>
                 </div>
 
                 <!-- Kho Tin Nhan -->
                 <div class="card">
-                    <div class="settings-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                    <div class="settings-section-title"
+                        style="display:flex;align-items:center;justify-content:space-between">
                         <span>✉️ Kho Tin Nhắn</span>
                         <span class="count-badge" id="settingsMsgCount">0 mẫu</span>
                     </div>
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Hệ thống <b>tự xoay vòng</b> + V10 Semantic Spinner biến đổi mỗi lần gửi. Biến: <code>{name}</code> <code>{phone}</code> <code>{date}</code></div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Hệ thống <b>tự xoay vòng</b>
+                        + V10 Semantic Spinner biến đổi mỗi lần gửi. Biến: <code>{name}</code> <code>{phone}</code>
+                        <code>{date}</code></div>
                     <div style="display:flex;gap:6px;margin-bottom:10px">
-                        <textarea id="settingsNewMsg" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px;resize:vertical;min-height:55px" placeholder="Gõ tin nhắn mẫu mới..."></textarea>
-                        <button class="btn-primary" id="btnAddSettingsMsg" style="padding:8px 12px;align-self:flex-end;white-space:nowrap">➕ Thêm</button>
+                        <textarea id="settingsNewMsg"
+                            style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px;resize:vertical;min-height:55px"
+                            placeholder="Gõ tin nhắn mẫu mới..."></textarea>
+                        <button class="btn-primary" id="btnAddSettingsMsg"
+                            style="padding:8px 12px;align-self:flex-end;white-space:nowrap">➕ Thêm</button>
                     </div>
-                    <div id="settingsMsgList" style="display:flex;flex-direction:column;gap:6px;max-height:250px;overflow-y:auto">
-                        <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px;border:1px dashed var(--card-border);border-radius:8px">Chưa có tin nhắn mẫu nào</div>
+                    <div id="settingsMsgList"
+                        style="display:flex;flex-direction:column;gap:6px;max-height:250px;overflow-y:auto">
+                        <div
+                            style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px;border:1px dashed var(--card-border);border-radius:8px">
+                            Chưa có tin nhắn mẫu nào</div>
                     </div>
                 </div>
 
                 <!-- Gioi han -->
                 <div class="card">
                     <div class="settings-section-title">⚡ Giới hạn &amp; An toàn</div>
-                    <div class="form-row inline"><label>Tối đa tin nhắn / ngày</label><input type="number" class="num-input" id="setMaxMsg" value="200" /></div>
-                    <div class="form-row inline"><label>Tối đa kết bạn / ngày</label><input type="number" class="num-input" id="setMaxFr" value="50" /></div>
-                    <div class="form-row inline"><label>Chế độ an toàn (giả lập hành vi người thật)</label><label class="switch"><input type="checkbox" id="setSafeMode" checked /><span class="slider"></span></label></div>
-                    <div class="form-row inline"><label>Khởi động cùng Windows</label><label class="switch"><input type="checkbox" id="setAutoStart" /><span class="slider"></span></label></div>
+                    <div class="form-row inline"><label>Tối đa tin nhắn / ngày</label><input type="number"
+                            class="num-input" id="setMaxMsg" value="200" /></div>
+                    <div class="form-row inline"><label>Tối đa kết bạn / ngày</label><input type="number"
+                            class="num-input" id="setMaxFr" value="50" /></div>
+                    <div class="form-row inline"><label>Chế độ an toàn (giả lập hành vi người thật)</label><label
+                            class="switch"><input type="checkbox" id="setSafeMode" checked /><span
+                                class="slider"></span></label></div>
+                    <div class="form-row inline"><label>Khởi động cùng Windows</label><label class="switch"><input
+                                type="checkbox" id="setAutoStart" /><span class="slider"></span></label></div>
                 </div>
 
                 <!-- About -->
@@ -797,7 +888,8 @@
                     <div class="about-info">
                         <div class="about-name">Zalo Bulk Tool Pro</div>
                         <div class="about-ver">Phiên bản 2.2.0 • V9-V12 Intelligence • Electron</div>
-                        <div class="about-features">✅ 23 thuật toán AI | 🔔 System Tray | 💾 Lưu cục bộ | 🔒 Dữ liệu không rời máy</div>
+                        <div class="about-features">✅ 23 thuật toán AI | 🔔 System Tray | 💾 Lưu cục bộ | 🔒 Dữ liệu
+                            không rời máy</div>
                     </div>
                 </div>
             </section>
@@ -805,13 +897,13 @@
 
             <!-- ══════ PAGE: AUTO PIPELINE
                 <!-- Hidden elements for renderer.js Pipeline logic -->
-                <div style="display:none" aria-hidden="true">
-                    <textarea id="pipeCookies"></textarea>
-                    <textarea id="pipeNewMsg"></textarea>
-                    <button id="btnPipeSaveAcct">Save</button>
-                    <button id="btnPipeClearAcct">Clear</button>
-                    <button id="btnAddPipeMsg">Add</button>
-                </div> ══════════════════════════════ -->
+            <div style="display:none" aria-hidden="true">
+                <textarea id="pipeCookies"></textarea>
+                <textarea id="pipeNewMsg"></textarea>
+                <button id="btnPipeSaveAcct">Save</button>
+                <button id="btnPipeClearAcct">Clear</button>
+                <button id="btnAddPipeMsg">Add</button>
+            </div> ══════════════════════════════ -->
             <section class="page" id="page-pipeline">
                 <div class="page-header">
                     <div>
@@ -823,20 +915,34 @@
                     </div>
                 </div>
                 <!-- 5-Stage Progress -->
-                <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(102,126,234,0.08),rgba(118,75,162,0.06));border:1px solid rgba(102,126,234,0.25)">
+                <div class="card"
+                    style="margin-bottom:16px;background:linear-gradient(135deg,rgba(102,126,234,0.08),rgba(118,75,162,0.06));border:1px solid rgba(102,126,234,0.25)">
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                        <div class="pipe-stage" id="pstage1" style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">🔗<br>Join Groups</div>
+                        <div class="pipe-stage" id="pstage1"
+                            style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">
+                            🔗<br>Join Groups</div>
                         <div style="color:var(--text-muted)">→</div>
-                        <div class="pipe-stage" id="pstage2" style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">🔍<br>Filter Open</div>
+                        <div class="pipe-stage" id="pstage2"
+                            style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">
+                            🔍<br>Filter Open</div>
                         <div style="color:var(--text-muted)">→</div>
-                        <div class="pipe-stage" id="pstage3" style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">📡<br>Harvest</div>
+                        <div class="pipe-stage" id="pstage3"
+                            style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">
+                            📡<br>Harvest</div>
                         <div style="color:var(--text-muted)">→</div>
-                        <div class="pipe-stage" id="pstage4" style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">💬<br>Score</div>
+                        <div class="pipe-stage" id="pstage4"
+                            style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">
+                            💬<br>Score</div>
                         <div style="color:var(--text-muted)">→</div>
-                        <div class="pipe-stage" id="pstage5" style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">🚀<br>DM+Invite</div>
+                        <div class="pipe-stage" id="pstage5"
+                            style="flex:1;min-width:90px;text-align:center;padding:8px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);font-size:11px">
+                            🚀<br>DM+Invite</div>
                     </div>
                     <div style="margin-top:12px">
-                        <div class="progress-bar"><div class="progress-fill" id="pipeProgressFill" style="width:0%;background:linear-gradient(90deg,#667eea,#f59e0b,#ef4444)"></div></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="pipeProgressFill"
+                                style="width:0%;background:linear-gradient(90deg,#667eea,#f59e0b,#ef4444)"></div>
+                        </div>
                         <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px">
                             <span id="pipeStatusText" style="color:var(--text-muted)">Chờ bắt đầu...</span>
                             <span id="pipePct" style="font-weight:700">0%</span>
@@ -845,12 +951,17 @@
                 </div>
 
                 <!-- ══ SCAN NHÓM MỞ CHAT ══ -->
-                <div class="card" style="margin-bottom:16px;border:1px solid rgba(16,185,129,0.3);background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(5,150,105,0.04))">
+                <div class="card"
+                    style="margin-bottom:16px;border:1px solid rgba(16,185,129,0.3);background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(5,150,105,0.04))">
                     <div class="card-header" style="margin-bottom:12px">
                         <span class="card-title" style="color:#10b981">🔍 Scan Nhóm Mở Chat</span>
                         <div style="display:flex;gap:6px;align-items:center">
-                            <span id="scanOpenCount" style="font-size:11px;background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:12px;font-weight:600">0 mở</span>
-                            <span id="scanClosedCount" style="font-size:11px;background:rgba(239,68,68,0.12);color:#ef4444;padding:2px 8px;border-radius:12px;font-weight:600">0 đóng</span>
+                            <span id="scanOpenCount"
+                                style="font-size:11px;background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:12px;font-weight:600">0
+                                mở</span>
+                            <span id="scanClosedCount"
+                                style="font-size:11px;background:rgba(239,68,68,0.12);color:#ef4444;padding:2px 8px;border-radius:12px;font-weight:600">0
+                                đóng</span>
                         </div>
                     </div>
                     <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -859,35 +970,49 @@
                             style="flex:1;resize:vertical;padding:10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px;font-family:monospace;min-height:100px"></textarea>
                     </div>
                     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-                        <button id="btnScanGroups" style="flex:1;min-width:120px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">
+                        <button id="btnScanGroups"
+                            style="flex:1;min-width:120px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">
                             🔍 Bắt đầu Scan
                         </button>
-                        <button id="btnFullAutoOpenChat" style="flex:1;min-width:160px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer" title="Scan → Join (tất cả TK) → Harvest → DM hàng loạt">
+                        <button id="btnFullAutoOpenChat"
+                            style="flex:1;min-width:160px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer"
+                            title="Scan → Join (tất cả TK) → Harvest → DM hàng loạt">
                             ⚡ Full Auto: Scan→Join→DM
                         </button>
-                        <button id="btnCopyScanOpen" style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer" disabled>
+                        <button id="btnCopyScanOpen"
+                            style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer"
+                            disabled>
                             📋 Copy nhóm mở
                         </button>
-                        <button id="btnCopyScanAll" style="background:rgba(255,255,255,0.04);color:var(--text-sub);border:1px solid var(--card-border);border-radius:8px;padding:9px 14px;font-size:12px;cursor:pointer" disabled>
+                        <button id="btnCopyScanAll"
+                            style="background:rgba(255,255,255,0.04);color:var(--text-sub);border:1px solid var(--card-border);border-radius:8px;padding:9px 14px;font-size:12px;cursor:pointer"
+                            disabled>
                             📥 Dùng vào Pipeline
                         </button>
-                        <button id="btnStopOpenChat" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">
+                        <button id="btnStopOpenChat"
+                            style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">
                             ■ Dừng
                         </button>
                     </div>
                     <!-- Full Auto status log -->
-                    <div id="openChatAutoLog" style="display:none;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px;max-height:120px;overflow-y:auto;font-size:11px;font-family:monospace;line-height:1.6;margin-bottom:8px"></div>
+                    <div id="openChatAutoLog"
+                        style="display:none;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px;max-height:120px;overflow-y:auto;font-size:11px;font-family:monospace;line-height:1.6;margin-bottom:8px">
+                    </div>
                     <!-- Multi-account join status -->
                     <div id="openChatJoinStatus" style="display:none;margin-bottom:8px">
-                        <div style="font-size:12px;font-weight:600;color:#a78bfa;margin-bottom:6px">📥 Trạng thái Join (tất cả TK)</div>
+                        <div style="font-size:12px;font-weight:600;color:#a78bfa;margin-bottom:6px">📥 Trạng thái Join
+                            (tất cả TK)</div>
                         <div id="openChatJoinList" style="font-size:11px;color:var(--text-sub)"></div>
                     </div>
                     <!-- Scan progress -->
                     <div id="scanProgressBar" style="display:none;margin-bottom:10px">
                         <div style="background:rgba(255,255,255,0.06);border-radius:6px;height:6px;overflow:hidden">
-                            <div id="scanProgressFill" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#06d6a0);border-radius:6px;transition:width 0.3s ease"></div>
+                            <div id="scanProgressFill"
+                                style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#06d6a0);border-radius:6px;transition:width 0.3s ease">
+                            </div>
                         </div>
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
+                        <div
+                            style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
                             <span id="scanStatusText">Đang scan...</span>
                             <span id="scanPct">0%</span>
                         </div>
@@ -895,85 +1020,115 @@
                     <!-- Results -->
                     <div id="scanResults" style="display:none">
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-                            <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:10px">
-                                <div style="font-size:12px;font-weight:700;color:#10b981;margin-bottom:6px">✅ NHÓM MỞ CHAT (<span id="openChatTotal">0</span>)</div>
-                                <div id="openChatList" style="max-height:160px;overflow-y:auto;font-size:11px;color:var(--text-h);line-height:1.8"></div>
+                            <div
+                                style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:10px">
+                                <div style="font-size:12px;font-weight:700;color:#10b981;margin-bottom:6px">✅ NHÓM MỞ
+                                    CHAT (<span id="openChatTotal">0</span>)</div>
+                                <div id="openChatList"
+                                    style="max-height:160px;overflow-y:auto;font-size:11px;color:var(--text-h);line-height:1.8">
+                                </div>
                             </div>
-                            <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:10px">
-                                <div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:6px">🔒 NHÓM ĐÓNG CHAT (<span id="closedChatTotal">0</span>)</div>
-                                <div id="closedChatList" style="max-height:160px;overflow-y:auto;font-size:11px;color:var(--text-muted);line-height:1.8"></div>
+                            <div
+                                style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:10px">
+                                <div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:6px">🔒 NHÓM ĐÓNG
+                                    CHAT (<span id="closedChatTotal">0</span>)</div>
+                                <div id="closedChatList"
+                                    style="max-height:160px;overflow-y:auto;font-size:11px;color:var(--text-muted);line-height:1.8">
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="two-col">
                     <div style="display:flex;flex-direction:column;gap:12px">
-                        <div class="card" style="background:linear-gradient(135deg,rgba(102,126,234,0.05),rgba(118,75,162,0.03));border:1px solid rgba(102,126,234,0.2)">
+                        <div class="card"
+                            style="background:linear-gradient(135deg,rgba(102,126,234,0.05),rgba(118,75,162,0.03));border:1px solid rgba(102,126,234,0.2)">
                             <div class="card-header">
-                                <span class="card-title">👤 Tài khoản đang dùng <span class="count-badge" id="pipeAcctCount">0 TK</span></span>
-                                <a href="#" id="pipeLinkToSettings" style="font-size:11px;color:#667eea;text-decoration:none">⚙️ Quản lý</a>
+                                <span class="card-title">👤 Tài khoản đang dùng <span class="count-badge"
+                                        id="pipeAcctCount">0 TK</span></span>
+                                <a href="#" id="pipeLinkToSettings"
+                                    style="font-size:11px;color:#667eea;text-decoration:none">⚙️ Quản lý</a>
                             </div>
-                            <div id="pipeAcctDisplay" style="display:flex;flex-direction:column;gap:6px;min-height:44px">
-                                <div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Đang tải tài khoản...</div>
+                            <div id="pipeAcctDisplay"
+                                style="display:flex;flex-direction:column;gap:6px;min-height:44px">
+                                <div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Đang
+                                    tải tài khoản...</div>
                             </div>
                         </div>
                         <div class="card">
                             <div class="card-header">
-                                <span class="card-title">🔗 Nhóm nguồn <span class="count-badge" id="pipeLinkCount">0 links</span></span>
+                                <span class="card-title">🔗 Nhóm nguồn <span class="count-badge" id="pipeLinkCount">0
+                                        links</span></span>
                                 <div class="card-actions">
                                     <button class="btn-sm" id="btnPipeSaveGroups">💾 Lưu</button>
                                     <button class="btn-sm" id="btnPipeAppendGroups">➕ Thêm</button>
                                     <button class="btn-sm" id="btnPipeClearGroups">✕ Xóa</button>
                                 </div>
                             </div>
-                            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Paste link → Lưu → lần sau tự load lại</div>
-                            <textarea id="pipeGroupLinks" class="big-textarea" style="min-height:100px" placeholder="https://zalo.me/g/..."></textarea>
+                            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Paste link → Lưu → lần
+                                sau tự load lại</div>
+                            <textarea id="pipeGroupLinks" class="big-textarea" style="min-height:100px"
+                                placeholder="https://zalo.me/g/..."></textarea>
                         </div>
                         <div class="card">
                             <div class="card-header">
-                                <span class="card-title">👥 Khách hàng <span class="count-badge" id="pipeCustomerCount">0 người</span></span>
+                                <span class="card-title">👥 Khách hàng <span class="count-badge"
+                                        id="pipeCustomerCount">0 người</span></span>
                                 <div class="card-actions">
                                     <button class="btn-sm" id="btnPipeSaveCustomers">💾 Lưu</button>
                                     <button class="btn-sm" id="btnPipeAppendCustomers">➕ Thêm</button>
                                     <button class="btn-sm" id="btnPipeClearCustomers">✕ Xóa</button>
                                 </div>
                             </div>
-                            <textarea id="pipeCustomers" class="big-textarea" style="min-height:80px" placeholder="0901234567&#10;uid:123456789"></textarea>
+                            <textarea id="pipeCustomers" class="big-textarea" style="min-height:80px"
+                                placeholder="0901234567&#10;uid:123456789"></textarea>
                         </div>
                         <div class="card">
                             <div class="card-header">
                                 <span class="card-title">🎯 Nhóm đích</span>
                                 <button class="btn-sm" id="btnPipeSaveDest">💾 Lưu</button>
                             </div>
-                            <textarea id="pipeDestGroups" class="big-textarea" style="min-height:55px" placeholder="123456789"></textarea>
+                            <textarea id="pipeDestGroups" class="big-textarea" style="min-height:55px"
+                                placeholder="123456789"></textarea>
                         </div>
-                        <div class="card" style="background:linear-gradient(135deg,rgba(102,126,234,0.05),rgba(118,75,162,0.03));border:1px solid rgba(102,126,234,0.2)">
+                        <div class="card"
+                            style="background:linear-gradient(135deg,rgba(102,126,234,0.05),rgba(118,75,162,0.03));border:1px solid rgba(102,126,234,0.2)">
                             <div class="card-header">
-                                <span class="card-title">✉️ Kho tin nhắn <span class="count-badge" id="pipeMsgCount">0 tin</span></span>
-                                <a href="#" id="pipeLinkToMsgs" style="font-size:11px;color:#667eea;text-decoration:none">⚙️ Quản lý</a>
+                                <span class="card-title">✉️ Kho tin nhắn <span class="count-badge" id="pipeMsgCount">0
+                                        tin</span></span>
+                                <a href="#" id="pipeLinkToMsgs"
+                                    style="font-size:11px;color:#667eea;text-decoration:none">⚙️ Quản lý</a>
                             </div>
-                            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Tin nhắn từ Cài Đặt → Kho Tin Nhắn. V10 tự spin mỗi lần gửi.</div>
-                            <div id="pipeMsgList" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto">
-                                <div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Đang tải tin nhắn...</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Tin nhắn từ Cài Đặt →
+                                Kho Tin Nhắn. V10 tự spin mỗi lần gửi.</div>
+                            <div id="pipeMsgList"
+                                style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto">
+                                <div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Đang
+                                    tải tin nhắn...</div>
                             </div>
                         </div>
                         <div class="card">
                             <div class="card-header"><span class="card-title">⚙️ Cài đặt Pipeline</span></div>
                             <div class="setting-row">
                                 <label>Max chatters/nhóm</label>
-                                <input type="number" class="num-input" id="pipeMaxPerGroup" value="200" min="10" max="500" />
+                                <input type="number" class="num-input" id="pipeMaxPerGroup" value="200" min="10"
+                                    max="500" />
                             </div>
                             <div class="setting-row">
                                 <label>Telegram</label>
-                                <span id="pipeTgStatus" style="font-size:11px;color:var(--text-muted)">Cấu hình tại <a href="#" id="pipeGoTgSettings" style="color:#667eea">Cài Đặt → Telegram</a></span>
+                                <span id="pipeTgStatus" style="font-size:11px;color:var(--text-muted)">Cấu hình tại <a
+                                        href="#" id="pipeGoTgSettings" style="color:#667eea">Cài Đặt →
+                                        Telegram</a></span>
                             </div>
                             <div class="setting-row">
                                 <label>Phone Scanner</label>
-                                <label class="switch"><input type="checkbox" id="pipePhoneScan" /><span class="slider"></span></label>
+                                <label class="switch"><input type="checkbox" id="pipePhoneScan" /><span
+                                        class="slider"></span></label>
                             </div>
                         </div>
                         <div class="btn-row">
-                            <button class="btn-primary" id="btnStartPipeline" style="background:linear-gradient(135deg,#667eea,#f59e0b)">⚡ Chạy Pipeline</button>
+                            <button class="btn-primary" id="btnStartPipeline"
+                                style="background:linear-gradient(135deg,#667eea,#f59e0b)">⚡ Chạy Pipeline</button>
                             <button class="btn-danger-sm" id="btnStopPipeline" disabled>■ Dừng</button>
                         </div>
                     </div>
@@ -1170,6 +1325,268 @@
                 </div>
             </section>
 
+            <!-- ══════ PAGE: AUTO JOIN ══════════════════════════════ -->
+            <section class="page" id="page-autojoin">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">🔗 Auto Join Nhóm</h1>
+                        <p class="page-sub">Dán link nhóm Zalo → Tự động join</p>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Cột trái: Nhập link -->
+                    <div>
+                        <div class="card">
+                            <div class="card-title">📋 Danh sách Link Nhóm</div>
+                            <textarea id="ajGroupLinks" rows="10"
+                                placeholder="Dán link nhóm (mỗi dòng 1 link)&#10;https://zalo.me/g/xxx&#10;https://zalo.me/g/yyy"
+                                style="width:100%;background:var(--bg-input);border:1px solid var(--card-border);border-radius:8px;padding:10px;color:var(--text-h);font-size:12px;resize:vertical"></textarea>
+                            <div style="display:flex;gap:8px;margin-top:8px">
+                                <button class="btn-sm" id="btnAJPaste">📋 Paste</button>
+                                <button class="btn-sm" id="btnAJClear">🗑 Xóa</button>
+                            </div>
+                            <div style="display:flex;gap:8px;margin-top:12px">
+                                <button class="btn-primary" id="btnAJStart" style="flex:1">▶ Bắt đầu Join</button>
+                                <button class="btn-sm" id="btnAJStop"
+                                    style="display:none;background:rgba(239,68,68,0.15);color:#ef4444">⏹ Dừng</button>
+                            </div>
+                        </div>
+
+                        <!-- Stats -->
+                        <div class="card" style="margin-top:12px">
+                            <div style="display:flex;gap:16px;text-align:center">
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#10b981" id="ajJoinedCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Joined</div>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#667eea" id="ajAlreadyCount">0
+                                    </div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Đã có</div>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#ef4444" id="ajFailedCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Lỗi</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cột phải: Kết quả + Log -->
+                    <div>
+                        <!-- Progress -->
+                        <div class="card">
+                            <div class="card-title">📊 Tiến trình</div>
+                            <div
+                                style="background:rgba(255,255,255,0.05);border-radius:6px;height:8px;overflow:hidden;margin-bottom:4px">
+                                <div id="ajProgressBar"
+                                    style="height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:6px;transition:width 0.3s">
+                                </div>
+                            </div>
+                            <div id="ajProgressText" style="font-size:11px;color:var(--text-muted);text-align:right">0%
+                            </div>
+                        </div>
+
+                        <!-- Kết quả -->
+                        <div class="card" style="margin-top:12px">
+                            <div class="card-title">📋 Kết quả</div>
+                            <div id="ajResultList" style="max-height:200px;overflow-y:auto">
+                                <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px">Chưa
+                                    có kết quả</div>
+                            </div>
+                        </div>
+
+                        <!-- Log -->
+                        <div class="card" style="margin-top:12px">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <div class="card-title">📝 Log</div>
+                                <button class="btn-sm" id="btnAJClearLog" style="font-size:10px">Xóa log</button>
+                            </div>
+                            <div id="ajLog" style="max-height:200px;overflow-y:auto;font-family:monospace"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: GỬI DM ══════════════════════════════════ -->
+            <section class="page" id="page-dm">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">💬 Gửi DM</h1>
+                        <p class="page-sub">Harvest thành viên nhóm → Gửi tin nhắn riêng</p>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Cột trái: Harvest -->
+                    <div>
+                        <div class="card">
+                            <div class="card-title">1️⃣ Nhóm nguồn (để harvest)</div>
+                            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                                <select id="dmGroupSelect"
+                                    style="flex:1;background:var(--bg-input);border:1px solid var(--card-border);border-radius:8px;padding:8px;color:var(--text-h);font-size:12px">
+                                    <option value="">-- Chọn nhóm --</option>
+                                </select>
+                                <button class="btn-sm" id="btnDMLoadGroups">🔄 Tải nhóm</button>
+                            </div>
+                            <input type="text" id="dmSourceGroup" placeholder="Hoặc nhập GroupID trực tiếp"
+                                style="width:100%;background:var(--bg-input);border:1px solid var(--card-border);border-radius:8px;padding:8px;color:var(--text-h);font-size:12px;margin-bottom:8px" />
+                            <button class="btn-primary" id="btnDMHarvest" style="width:100%">🔍 Harvest thành
+                                viên</button>
+                        </div>
+
+                        <!-- Danh sách target -->
+                        <div class="card" style="margin-top:12px">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <div class="card-title">👥 Thành viên (<span id="dmTargetCount">0</span>)</div>
+                                <div style="display:flex;gap:6px">
+                                    <button class="btn-sm" id="btnDMCopyUIDs" style="font-size:10px">📋 Copy
+                                        UIDs</button>
+                                    <button class="btn-sm" id="btnDMClearList" style="font-size:10px">🗑 Xóa</button>
+                                </div>
+                            </div>
+                            <div id="dmTargetList" style="max-height:250px;overflow-y:auto">
+                                <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px">Chưa
+                                    harvest</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cột phải: Gửi DM -->
+                    <div>
+                        <div class="card">
+                            <div class="card-title">2️⃣ Nội dung tin nhắn</div>
+                            <textarea id="dmMsgContent" rows="5" placeholder="Nhập nội dung tin nhắn DM...&#10;Biến hỗ trợ: <Name> = Tên Zalo&#10;Spin: {Chào|Hi|Xin chào} <Name>!"
+                                style="width:100%;background:var(--bg-input);border:1px solid var(--card-border);border-radius:8px;padding:10px;color:var(--text-h);font-size:12px;resize:vertical"></textarea>
+                            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:4px 8px;background:rgba(102,126,234,0.08);border-radius:6px">
+                                💡 <code>&lt;Name&gt;</code> = Tên Zalo người nhận · <code>{A|B|C}</code> = Chọn ngẫu nhiên
+                            </div>
+
+                            <!-- Cấu hình tương tác -->
+                            <div style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:8px">
+                                <div style="font-size:11px;font-weight:600;color:var(--text-h);margin-bottom:8px">⚙️ Cấu hình tương tác</div>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:5px">
+                                    <input type="checkbox" id="dmFilterAdmin" checked style="accent-color:#667eea"> Bỏ qua Quản trị viên
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:5px">
+                                    <input type="checkbox" id="dmFilterDuplicate" checked style="accent-color:#667eea"> Không gửi trùng người đã gửi
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
+                                    <input type="checkbox" id="dmAddFriend" style="accent-color:#10b981"> 🤝 Kết bạn sau khi gửi DM
+                                </label>
+                                <div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text-muted)">
+                                    <span>Delay:</span>
+                                    <input type="number" id="dmDelayMin" placeholder="min" min="0" step="0.5" style="width:50px;padding:4px;border-radius:6px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:11px;text-align:center">
+                                    <span>—</span>
+                                    <input type="number" id="dmDelayMax" placeholder="max" min="0" step="0.5" style="width:50px;padding:4px;border-radius:6px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:11px;text-align:center">
+                                    <span>giây (trống = tự động)</span>
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:8px;margin-top:10px">
+                                <button class="btn-primary" id="btnDMSend" style="flex:1">📤 Gửi DM</button>
+                                <button class="btn-sm" id="btnDMStop"
+                                    style="display:none;background:rgba(239,68,68,0.15);color:#ef4444">⏹ Dừng</button>
+                            </div>
+                        </div>
+
+                        <!-- Stats -->
+                        <div class="card" style="margin-top:12px">
+                            <div style="display:flex;gap:16px;text-align:center">
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#10b981" id="dmSentCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Gửi OK</div>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#ef4444" id="dmFailCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Lỗi</div>
+                                </div>
+                            </div>
+                            <!-- Progress -->
+                            <div
+                                style="background:rgba(255,255,255,0.05);border-radius:6px;height:8px;overflow:hidden;margin-top:8px">
+                                <div id="dmProgressBar"
+                                    style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#059669);border-radius:6px;transition:width 0.3s">
+                                </div>
+                            </div>
+                            <div id="dmProgressText"
+                                style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px">0%</div>
+                        </div>
+
+                        <!-- Log -->
+                        <div class="card" style="margin-top:12px">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <div class="card-title">📝 Log</div>
+                                <button class="btn-sm" id="btnDMClearLog" style="font-size:10px">Xóa log</button>
+                            </div>
+                            <div id="dmLog" style="max-height:200px;overflow-y:auto;font-family:monospace"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══════ PAGE: TRẠI NUÔI ══════════════════════════════════ -->
+            <section class="page" id="page-nurture">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">🌾 Trại Nuôi Acc (Auto Warm-up)</h1>
+                        <p class="page-sub">Tự động tương tác chéo giữa các tài khoản phụ để tăng độ Trust.</p>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Cột trái: Điều khiển -->
+                    <div>
+                        <div class="card">
+                            <div class="card-title">⚙️ Điều khiển Nurture</div>
+                            <div style="margin-bottom:12px; font-size:12px; color:var(--text-muted)">
+                                Hệ thống sẽ tự động ghép cặp các tài khoản phụ trong Pool và nhắn tin qua lại với nhau.
+                                <br>
+                                Cần ít nhất 2 tài khoản phụ trở lên để bắt đầu.
+                            </div>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn-primary" id="btnNurtureStart" style="flex:1">▶ Bắt đầu
+                                    Warm-up</button>
+                                <button class="btn-sm" id="btnNurtureStop"
+                                    style="display:none;background:rgba(239,68,68,0.15);color:#ef4444">⏹ Dừng</button>
+                            </div>
+                        </div>
+
+                        <!-- Stats -->
+                        <div class="card" style="margin-top:12px">
+                            <div style="display:flex;gap:16px;text-align:center">
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#10b981" id="ntSentCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Tin đã gửi</div>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#667eea" id="ntAccCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Acc online</div>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-size:20px;font-weight:700;color:#ef4444" id="ntFailCount">0</div>
+                                    <div style="font-size:10px;color:var(--text-muted)">Lỗi</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cột phải: Terminal & Log -->
+                    <div>
+                        <div class="card">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <div class="card-title">📝 Nurture Terminal</div>
+                                <button class="btn-sm" id="btnNurtureClearLog" style="font-size:10px">Xóa log</button>
+                            </div>
+                            <div id="ntLog"
+                                style="max-height:300px;overflow-y:auto;font-family:monospace;background:#0d1117;padding:10px;border-radius:6px;margin-top:10px;color:#c9d1d9;font-size:11px">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main><!-- end main-area -->
     </div><!-- end app-layout -->
 
@@ -1258,6 +1675,9 @@
     <div id="toastWrap"></div>
 
     <script src="renderer.js"></script>
+    <script src="renderer-dm.js"></script>
+    <script src="renderer-autojoin.js"></script>
+    <script src="renderer-nurture.js"></script>
 </body>
 
 </html>

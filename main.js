@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const zaloApi = require('./zalo-api');
@@ -199,6 +199,11 @@ ipcMain.handle('zalo:sendFriendRequest', async (_e, cookie, phone, msg) => {
     catch (err) { return { success: false, error: err.message }; }
 });
 
+ipcMain.handle('zalo:sendFriendRequestByUid', async (_e, cookie, uid, msg) => {
+    try { return await zaloApi.sendFriendRequestByUid(cookie, uid, msg); }
+    catch (err) { return { success: false, error: err.message }; }
+});
+
 ipcMain.handle('zalo:loginQR', async () => {
     try {
         const qrPath = path.join(app.getPath('temp'), 'zalo_qr.png');
@@ -256,7 +261,7 @@ ipcMain.handle('zalo:loginQR', async () => {
                     try {
                         const info = await zaloApi.getUserInfo(cookieStr);
                         if (info && info.uid) { uid = String(info.uid); name = info.name || info.displayName || name; }
-                    } catch (_) {}
+                    } catch (_) { }
                 }
                 // FIX: Luôn lưu loggedIn + connectedAccount dù cookie null (QR session cached)
                 const store = readData();
@@ -286,6 +291,75 @@ ipcMain.handle('zalo:loginQR', async () => {
     }
 });
 
+// -------------- NEW: POOL LOGIN QR ---------------- //
+ipcMain.handle('zalo:poolLoginQR', async () => {
+    try {
+        const qrPath = path.join(app.getPath('temp'), 'zalo_pool_qr.png');
+        // Start QR login async
+        zaloApi.loginQR(qrPath, (imgPath, event) => {
+            try {
+                const imgBase64 = event?.data?.image;
+                const qrUrl = event?.data?.qrUrl;
+                if (imgBase64) {
+                    const dataUrl = imgBase64.startsWith('data:') ? imgBase64 : `data:image/png;base64,${imgBase64}`;
+                    mainWindow.webContents.send('zalo:poolQrReady', dataUrl);
+                } else if (qrUrl) {
+                    if (!qrUrl.startsWith('data:') && (qrUrl.startsWith('http://') || qrUrl.startsWith('https://'))) {
+                        const fetcher = qrUrl.startsWith('https') ? require('https') : require('http');
+                        fetcher.get(qrUrl, (res) => {
+                            const chunks = [];
+                            res.on('data', c => chunks.push(c));
+                            res.on('end', () => {
+                                const b64 = Buffer.concat(chunks).toString('base64');
+                                mainWindow.webContents.send('zalo:poolQrReady', `data:image/png;base64,${b64}`);
+                            });
+                        }).on('error', e => console.error('[POOL_QR] fetch error:', e.message));
+                    } else {
+                        mainWindow.webContents.send('zalo:poolQrReady', qrUrl);
+                    }
+                } else if (fs.existsSync(imgPath)) {
+                    const b64 = fs.readFileSync(imgPath).toString('base64');
+                    mainWindow.webContents.send('zalo:poolQrReady', `data:image/png;base64,${b64}`);
+                } else {
+                    mainWindow.webContents.send('zalo:poolLoginError', 'KhÃ´ng láº¥y Ä‘Æ°á»£c QR tá»« zca-js');
+                }
+            } catch (e) {
+                console.error('[POOL_QR] Error:', e.message);
+            }
+        }).then(async () => {
+            try {
+                const cookieData = zaloApi.lastQRCookie || (zaloApi.getCookies ? zaloApi.getCookies() : null);
+                const cookieStr = cookieData ? (typeof cookieData === 'string' ? cookieData : JSON.stringify(cookieData)) : null;
+
+                let uid = '', name = 'Tài khoản Phụ (QR)';
+                if (cookieStr && cookieStr !== 'null') {
+                    try {
+                        const info = await zaloApi.getUserInfo(cookieStr);
+                        if (info && info.uid) { uid = String(info.uid); name = info.name || info.displayName || name; }
+                    } catch (_) { }
+                }
+
+                // KHÔNG ghi đè store chính. Trả thẳng cho Renderer xử lý!
+                mainWindow.webContents.send('zalo:poolLoginSuccess', {
+                    success: true,
+                    cookie: cookieStr || null,
+                    uid,
+                    name
+                });
+            } catch (e) {
+                console.error('[POOL_QR] post-login:', e.message);
+                mainWindow.webContents.send('zalo:poolLoginSuccess', { success: true });
+            }
+        }).catch(err => {
+            console.error('[POOL_QR] login failed:', err.message);
+            mainWindow.webContents.send('zalo:poolLoginError', err.message);
+        });
+        return { success: true, message: 'Đang tạo mã QR...' };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
 ipcMain.handle('zalo:findUser', async (_e, cookie, phone) => {
     try { return await zaloApi.findUserByPhone(cookie, phone); }
     catch (err) { return { success: false, error: err.message }; }
@@ -310,7 +384,7 @@ ipcMain.handle('zalo:sendBulkSmart', async (_e, cookie, params) => {
     try {
         console.log(`[BULK_SMART] inputType=${params.inputType} targets=${params.phones?.length || params.groupId} inviteGroupIds=${JSON.stringify(params.inviteGroupIds || 'none')}`);
         const result = await zaloApi.sendBulkSmart(cookie, params, (progress) => {
-            try { mainWindow?.webContents?.send('zalo:bulkSmartProgress', progress); } catch (_) {}
+            try { mainWindow?.webContents?.send('zalo:bulkSmartProgress', progress); } catch (_) { }
         });
         return result;
     } catch (err) {
@@ -335,7 +409,7 @@ ipcMain.handle('zalo:runFullPipeline', async (_e, params) => {
                     mainWindow.webContents.send('pipeline-progress', p);
             }
         });
-    } catch(e) {
+    } catch (e) {
         return { stage: 'error', errors: [e.message] };
     }
 });
@@ -358,7 +432,7 @@ ipcMain.handle('zalo:autoJoinGroups', async (_e, cookies, groupLinks) => {
                     mainWindow.webContents.send('autoJoin-progress', p);
             }
         });
-    } catch(e) {
+    } catch (e) {
         return { error: e.message, joined: [], failed: groupLinks.map(l => ({ link: l, reason: e.message })), alreadyIn: [] };
     }
 });
@@ -374,7 +448,7 @@ ipcMain.handle('zalo:checkGroupChatStatus', async (_e, cookie, groupIds) => {
                     mainWindow.webContents.send('chat-status-progress', p);
             }
         });
-    } catch(e) {
+    } catch (e) {
         return { error: e.message, statusList: [] };
     }
 });
@@ -388,6 +462,11 @@ ipcMain.handle('zalo:accountPool:add', async (_e, cookie, name, uid) => {
 
 ipcMain.handle('zalo:accountPool:getAll', async () => {
     return zaloApi.accountPool.getAll();
+});
+
+ipcMain.handle('zalo:accountPool:getCookie', async (_e, uid) => {
+    const acc = zaloApi.accountPool.accounts.find(a => a.uid === uid);
+    return acc ? acc.cookie : null;
 });
 
 ipcMain.handle('zalo:accountPool:remove', async (_e, uid) => {
@@ -500,7 +579,7 @@ ipcMain.handle('zalo:v2:resumeSession', async (_e, sessionId, cookie) => {
             inputType: 'uids',
             uids: remainingTargets.map(t => t.uid),
         }, (data) => {
-            try { mainWindow?.webContents?.send('zalo:bulkSmartProgress', data); } catch (_) {}
+            try { mainWindow?.webContents?.send('zalo:bulkSmartProgress', data); } catch (_) { }
         });
         return result;
     } catch (e) {
