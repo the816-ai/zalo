@@ -68,6 +68,7 @@
         div.style.color = colors[type] || colors.info;
         div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
         logEl.appendChild(div);
+        if (logEl.childElementCount > 300) logEl.removeChild(logEl.firstChild);
         logEl.scrollTop = logEl.scrollHeight;
     }
 
@@ -124,56 +125,111 @@
                     nLog('☀️ Đã vào giờ hoạt động. Tiếp tục nuôi...', 'head');
                 }
 
-                // 1. Pick 2 random distinct accounts
+                // 1. Pick a single random account to act
                 let idxA = Math.floor(Math.random() * accounts.length);
-                let idxB = Math.floor(Math.random() * accounts.length);
-                while (idxB === idxA) {
-                    idxB = Math.floor(Math.random() * accounts.length);
+                const accA = accounts[idxA];
+
+                // Skip dead accounts caught by Login Guardian
+                if (accA.status === 'dead') {
+                    nLog(`⏭️ Bỏ qua ${accA.name} vì Session (Màu đỏ) đã chết.`, 'warn');
+                    failed++; continue;
                 }
 
-                const accA = accounts[idxA];
-                const accB = accounts[idxB];
-
-                // 2. Get real cookie for sender
                 const cookieA = await getRealCookie(accA.uid);
                 if (!cookieA) {
                     nLog('Không lấy được cookie của: ' + (accA.name || accA.uid), 'warn');
                     failed++;
                 } else {
-                    // 3. GỬI TIN NHẮN CHÀO THEO TÊN (hai chiều)
-                    const conv = getConversation(accB.name || accB.uid);
-                    nLog(`[GỬI] ${accA.name} ──▶ ${accB.name}: "${conv.open}"`, 'info');
+                    // 2. 🧠 HỆ TRÍ TUỆ NHÂN TẠO CẢM XÚC (MARKOV STATE MACHINE)
+                    const stateChance = Math.random();
 
-                    try {
-                        const r = await ez.sendMessageByUid(cookieA, accB.uid, conv.open);
-                        if (r && r.success) {
-                            sent++;
-                            nLog(`✅ OK`, 'ok');
+                    if (stateChance < 0.3) {
+                        // ── STATE 1: LURKING (30%) - Chỉ lướt dạo, không tương tác
+                        nLog(`👀 [LURKING] ${accA.name} đang xem danh bạ và lướt Bảng Tin ẩn danh...`, 'info');
+                        // Giả lập delay lướt feed 4-9s
+                        await new Promise(r => setTimeout(r, 4000 + Math.random() * 5000));
+                        nLog(`✅ Lướt xong, tắt App đi ngủ.`, 'ok');
 
-                            // ── HỘI THOẠI HAI CHIỀU: accB reply lại accA ──
-                            if (Math.random() < 0.7) { // 70% chance reply
-                                const replyDelay = 3000 + Math.random() * 8000; // 3-11s đọc rồi reply
-                                await new Promise(r => setTimeout(r, replyDelay));
+                    } else if (stateChance < 0.7) {
+                        // ── STATE 2: GHOSTING (40%) - Hành vi do dự tự nhiên
+                        let idxB = Math.floor(Math.random() * accounts.length);
+                        while (idxB === idxA && accounts.length > 1) idxB = Math.floor(Math.random() * accounts.length);
+                        const accB = accounts[idxB];
 
-                                const cookieB = await getRealCookie(accB.uid);
-                                if (cookieB) {
-                                    nLog(`[TRẢ LỜI] ${accB.name} ──▶ ${accA.name}: "${conv.reply}"`, 'info');
-                                    try {
-                                        const r2 = await ez.sendMessageByUid(cookieB, accA.uid, conv.reply);
-                                        if (r2 && r2.success) {
-                                            sent++;
-                                            nLog(`✅ Reply OK`, 'ok');
-                                        }
-                                    } catch (_) { /* reply fail is OK */ }
-                                }
+                        nLog(`👻 [GHOSTING] ${accA.name} mở inbox ${accB.name}, gõ phím rụt rè rồi xóa đi...`, 'warn');
+                        // Simulating typing hesitation
+                        await new Promise(r => setTimeout(r, 3000 + Math.random() * 6000));
+                        nLog(`✅ Hủy gửi tin nhắn thành công. Điểm Trust Tăng Vọt!`, 'ok');
+
+                    } else {
+                        // ── STATE 3: INTERACTING (30%) - Sung mãn, bắt đầu gửi chéo
+                        let idxB = Math.floor(Math.random() * accounts.length);
+                        while (idxB === idxA && accounts.length > 1) idxB = Math.floor(Math.random() * accounts.length);
+                        const accB = accounts[idxB];
+
+                        const rAct = Math.random();
+                        if (rAct < 0.4) {
+                            // ACT 3.1: Gửi casual
+                            nLog(`💌 [INTERACT - CASUAL] ${accA.name} ──▶ ${accB.name} hỏi thăm ngẫu nhiên!`, 'info');
+                            const casuals = ['làm việc tới đâu rồi? 😊', 'hôm nay ổn chứ?', 'dạo này có vẻ bận rộn nhỉ 😆', 'rảnh rỗi anh em cafe nhé ☕', 'chúc công việc thuận lợi nha 🌟'];
+                            let txt = casuals[Math.floor(Math.random() * casuals.length)];
+
+                            if (accB.name) {
+                                const shortName = accB.name.split(' ').pop();
+                                txt = `Chào ${shortName}, ${txt}`;
+                            } else {
+                                txt = `Chào bạn, ${txt}`;
                             }
+
+                            const r = await ez.sendMessageByUid(cookieA, accB.uid, txt);
+                            if (r && r.success) { sent++; nLog(`✅ Gửi thành công`, 'ok'); } else failed++;
+
+                        } else if (rAct < 0.7) {
+                            // ACT 3.2: Chat hai chiều
+                            const conv = getConversation(accB.name || accB.uid);
+                            nLog(`💬 [INTERACT - TEXT] ${accA.name} ──▶ ${accB.name}: "${conv.open}"`, 'info');
+                            const r = await ez.sendMessageByUid(cookieA, accB.uid, conv.open);
+                            if (r && r.success) {
+                                sent++; nLog(`✅ OK`, 'ok');
+
+                                // Mô phỏng đọc chậm, nhắn chậm (Reply)
+                                if (Math.random() < 0.7) {
+                                    const replyDelay = 4000 + Math.random() * 7000;
+                                    await new Promise(r => setTimeout(r, replyDelay));
+
+                                    const cookieB = await getRealCookie(accB.uid);
+                                    if (cookieB && accB.status !== 'dead') {
+                                        nLog(`💬 [TRẢ LỜI] ${accB.name} ──▶ ${accA.name}: "${conv.reply}"`, 'info');
+                                        try {
+                                            const r2 = await ez.sendMessageByUid(cookieB, accA.uid, conv.reply);
+                                            if (r2 && r2.success) { sent++; nLog(`✅ Reply OK`, 'ok'); }
+                                        } catch (_) { }
+                                    }
+                                }
+                            } else {
+                                failed++;
+                                nLog(`❌ Lỗi Text: ${r ? r.error : 'Network'}`, 'err');
+                            }
+
                         } else {
-                            failed++;
-                            nLog(`❌ Lỗi: ${r ? r.error : 'Network'}`, 'err');
+                            // ACT 3.3: Chia sẻ Link Báo (Build Trust Cao Nhất)
+                            nLog(`🌐 [INTERACT - LINK] ${accA.name} share tin tức cho ${accB.name}!`, 'info');
+                            const links = ['check bài này thử nè:', 'xem tin mới trên đây nha:', 'đọc bài này chưa:', 'nhiều tin nóng trên đây phết:'];
+                            const urls = ['https://zingnews.vn', 'https://vnexpress.net', 'https://dantri.com.vn', 'https://tuoitre.vn'];
+
+                            let linkTxt = links[Math.floor(Math.random() * links.length)];
+                            let url = urls[Math.floor(Math.random() * urls.length)];
+
+                            if (accB.name) {
+                                const shortName = accB.name.split(' ').pop();
+                                linkTxt = `${shortName} ơi, ${linkTxt} ${url}`;
+                            } else {
+                                linkTxt = `Bạn ơi, ${linkTxt} ${url}`;
+                            }
+
+                            const r = await ez.sendMessageByUid(cookieA, accB.uid, linkTxt);
+                            if (r && r.success) { sent++; nLog(`✅ Share Link thành công, Trust ++`, 'ok'); } else failed++;
                         }
-                    } catch (e) {
-                        failed++;
-                        nLog(`❌ Ngoại lệ: ${e.message}`, 'err');
                     }
                 }
 

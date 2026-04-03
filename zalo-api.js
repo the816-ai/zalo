@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
  *  Zalo API Backend â€“ dÃ¹ng zca-js (Ä‘Ã£ reverse-engineer
@@ -75,7 +75,7 @@ class PriorityQueue {
 class SessionManager {
     constructor() {
         this._dir = path.join(process.env.APPDATA || os.homedir(), 'Zalo Bulk Tool Pro', 'sessions');
-        try { fs.mkdirSync(this._dir, { recursive: true }); } catch (_) {}
+        try { fs.mkdirSync(this._dir, { recursive: true }); } catch (_) { }
     }
     _getPath(sessionId) { return path.join(this._dir, `${sessionId}.json`); }
 
@@ -102,7 +102,7 @@ class SessionManager {
             s.results = { ...s.results, ...results };
             s.checkpoint = Date.now();
             this._save(sessionId, s);
-        } catch (_) {}
+        } catch (_) { }
     }
     complete(sessionId, results) {
         try {
@@ -112,7 +112,7 @@ class SessionManager {
             s.results = { ...s.results, ...results };
             s.completedAt = Date.now();
             this._save(sessionId, s);
-        } catch (_) {}
+        } catch (_) { }
     }
     getIncomplete() {
         try {
@@ -122,7 +122,7 @@ class SessionManager {
                 try {
                     const s = JSON.parse(fs.readFileSync(path.join(this._dir, f), 'utf8'));
                     if (s.status === 'running') sessions.push(s);
-                } catch (_) {}
+                } catch (_) { }
             }
             // Only return sessions < 24h old
             return sessions.filter(s => Date.now() - s.createdAt < 86400000);
@@ -130,7 +130,7 @@ class SessionManager {
     }
     getSession(sessionId) { return this._load(sessionId); }
     _save(id, data) {
-        try { fs.writeFileSync(this._getPath(id), JSON.stringify(data, null, 2)); } catch (_) {}
+        try { fs.writeFileSync(this._getPath(id), JSON.stringify(data, null, 2)); } catch (_) { }
     }
     _load(id) {
         try { return JSON.parse(fs.readFileSync(this._getPath(id), 'utf8')); } catch (_) { return null; }
@@ -143,9 +143,9 @@ class SessionManager {
                 try {
                     const s = JSON.parse(fs.readFileSync(path.join(this._dir, f), 'utf8'));
                     if (s.createdAt < cutoff) fs.unlinkSync(path.join(this._dir, f));
-                } catch (_) {}
+                } catch (_) { }
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 }
 
@@ -156,10 +156,10 @@ class MarkovTimer {
         // States: 0=SHORT(1-3s), 1=MEDIUM(3-8s), 2=LONG(8-20s), 3=PAUSE(20-60s)
         this._state = 0;
         this._transitions = [
-            /* FROM SHORT  â†’ */ [0.40, 0.35, 0.20, 0.05],
-            /* FROM MEDIUM â†’ */ [0.25, 0.40, 0.25, 0.10],
-            /* FROM LONG   â†’ */ [0.15, 0.35, 0.30, 0.20],
-            /* FROM PAUSE  â†’ */ [0.50, 0.30, 0.15, 0.05],
+            /* FROM SHORT  â†’ */[0.40, 0.35, 0.20, 0.05],
+            /* FROM MEDIUM â†’ */[0.25, 0.40, 0.25, 0.10],
+            /* FROM LONG   â†’ */[0.15, 0.35, 0.30, 0.20],
+            /* FROM PAUSE  â†’ */[0.50, 0.30, 0.15, 0.05],
         ];
         this._ranges = [
             [1000, 3000],
@@ -216,14 +216,14 @@ class HoneypotDetector {
         try {
             const data = JSON.parse(fs.readFileSync(this._blacklistFile, 'utf8'));
             data.forEach(uid => this._blacklist.add(uid));
-        } catch (_) {}
+        } catch (_) { }
     }
     _save() {
         try {
             const dir = path.dirname(this._blacklistFile);
             fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(this._blacklistFile, JSON.stringify([...this._blacklist]));
-        } catch (_) {}
+        } catch (_) { }
     }
     isBlacklisted(uid) { return this._blacklist.has(String(uid)); }
     addToBlacklist(uid) { this._blacklist.add(String(uid)); this._save(); }
@@ -347,7 +347,7 @@ function createNoiseActions(api) {
         // V2: new noise types
         () => api.getAllFriends(50, Math.floor(Math.random() * 5)).catch(() => null),
         () => api.getAllGroups().catch(() => null),
-        () => { try { api.getOwnId(); } catch (_) {} return null; },
+        () => { try { api.getOwnId(); } catch (_) { } return null; },
         () => api.getStickers('trending').catch(() => null),
         () => api.getStickers('hot').catch(() => null),
         () => new Promise(r => setTimeout(r, 300 + Math.random() * 700)), // "thinking" pause
@@ -417,7 +417,7 @@ let _userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (
 // â”€â”€ Luhn checksum for IMEI validation â”€â”€
 function generateLuhnIMEI() {
     // Real TAC codes: Samsung/Xiaomi/Oppo/Vivo phá»• biáº¿n Viá»‡t Nam
-    const tacs = ['35674711','35378710','86498604','35740609','86476502','35462509'];
+    const tacs = ['35674711', '35378710', '86498604', '35740609', '86476502', '35462509'];
     const tac = tacs[Math.floor(Math.random() * tacs.length)];
     let partial = tac + String(Math.floor(Math.random() * 9999999)).padStart(7, '0');
     // TÃ­nh Luhn check digit
@@ -434,8 +434,8 @@ function getImei(forceNew = false) {
     if (forceNew) {
         // Luhn-valid 15-digit IMEI wrapped in Zalo UUID format
         const luhnIMEI = generateLuhnIMEI();
-        const hex = (n) => [...Array(n)].map(() => Math.floor(Math.random()*16).toString(16)).join('');
-        const newImei = `${luhnIMEI.slice(0,8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(12)}-${hex(32)}`;
+        const hex = (n) => [...Array(n)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+        const newImei = `${luhnIMEI.slice(0, 8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(12)}-${hex(32)}`;
         console.log(`[IMEI] New device (Luhn: ${luhnIMEI})`);
         return newImei;
     }
@@ -494,7 +494,7 @@ async function getApi(cookie, forceRefresh = false) {
         ? (_pickedUA.match(/Android ([\d.]+)/)?.[1] || '14')
         : (_pickedUA.match(/iOS ([\d.]+)/)?.[1] || '17');
     const _screenDpi = [2.0, 2.5, 2.75, 3.0][Math.floor(Math.random() * 4)];
-    const _netType  = ['WIFI', 'LTE', '5G'][Math.floor(Math.random() * 3)];
+    const _netType = ['WIFI', 'LTE', '5G'][Math.floor(Math.random() * 3)];
 
     const credentials = {
         imei,
@@ -583,9 +583,16 @@ async function loginQR(qrImagePath, onQRReady) {
     );
 
 
-    // Store api for subsequent calls
+        // Store api for subsequent calls
     _api = api;
     _cookieHash = 'QR_LOGIN';
+    
+    // Xuất Cookie lưu trữ vòng ngoài cho main.js thu hồi sau khi quét QR Phụ
+    try {
+        const cks = typeof api.getCookies === 'function' ? api.getCookies() : null;
+        module.exports.lastQRCookie = typeof cks === 'string' ? cks : JSON.stringify(cks);
+    } catch(e) {}
+    
     return { success: true };
 }
 
@@ -722,6 +729,35 @@ async function sendFriendRequest(cookie, phone, message = '') {
 // ══════════════════════════════════════════════════════════════
 // 4b. KẾT BẠN BẰNG UID (không cần phone)
 // ══════════════════════════════════════════════════════════════
+
+async function massSendGroupMsgs(params) {
+    try {
+        const { cookie, groupId, content } = params;
+        const api = await getApi(cookie);
+        if (!api) return { success: false, error: 'Không tải được API' };
+
+        await api.sendMessage({ msg: content, quote: null }, groupId, 1); // 1 = ThreadType.Group
+        return { success: true };
+    } catch(err) {
+        return { success: false, error: err.message || String(err) };
+    }
+}
+
+
+async function leaveGroup(cookie, groupId) {
+    try {
+        const api = await getApi(cookie);
+        if (!api) return { success: false, error: 'Không tải được API' };
+        
+        // Use zca-js api to leave group: api.leaveGroup(groupId) is typical, or removeUserFromGroup.
+        // I will just call api.leaveGroup(groupId)
+        const result = await api.leaveGroup(groupId);
+        return { success: true, result };
+    } catch(err) {
+        return { success: false, error: err.message || String(err) };
+    }
+}
+
 async function sendFriendRequestByUid(cookie, uid, message = '') {
     try {
         const api = await getApi(cookie);
@@ -2598,7 +2634,7 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
             //  sendFriendRequest khÃ´ng cáº§n há» accept,
             //  chá»‰ cáº§n Táº O pending relationship trÃªn server
             // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-            
+
             // âš¡ FR-Race: fire & forget sendFriendRequest cho cáº£ batch
             let frSent = 0;
             for (const uid of batch) {
@@ -2623,11 +2659,11 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
 
             try {
                 const tempName = `_t${Date.now().toString(36).slice(-4)}`;
-                
+
                 // BÆ¯á»šC 1: createGroup temp vá»›i stranger UIDs
                 const cr = await api.createGroup({ name: tempName, members: batch });
                 const tempGid = cr?.groupId;
-                
+
                 if (!tempGid) {
                     log(`  âš ï¸ createGroup tráº£ null â†’ thá»­ addUserToGroup...`);
                     // Fallback: addUserToGroup trá»±c tiáº¿p
@@ -2647,19 +2683,19 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
                     const errMembers = new Set((cr?.errorMembers || []).map(String));
                     const okInTemp = batch.filter(u => !errMembers.has(String(u)));
                     const failInTemp = batch.filter(u => errMembers.has(String(u)));
-                    
+
                     log(`  ðŸ‘» createGroup "${tempName}" â†’ +${okInTemp.length} trong temp`);
-                    
+
                     if (failInTemp.length) {
                         stats.blocked += failInTemp.length;
                         for (const uid of failInTemp) blockedUids.push(uid);
                         log(`  ðŸ”’ ${failInTemp.length} bá»‹ cháº·n cáº£ createGroup (full privacy)`);
                     }
-                    
+
                     // BÆ¯á»šC 2: Má»i tá»« bond context sang nhÃ³m Ä‘Ã­ch
                     if (okInTemp.length > 0) {
                         await sleep(jitter(1000)); // Bond window
-                        
+
                         // Thá»­ addUserToGroup trÆ°á»›c (nhanh, batch)
                         let moveOk = false;
                         try {
@@ -2667,7 +2703,7 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
                             const rtErr = new Set((rt?.errorMembers || []).map(String));
                             const movedOk = okInTemp.filter(u => !rtErr.has(String(u)));
                             const movedFail = okInTemp.filter(u => rtErr.has(String(u)));
-                            
+
                             stats.pending += movedOk.length;
                             if (movedOk.length) {
                                 log(`  â³ +${movedOk.length} â†’ pending nhÃ³m Ä‘Ã­ch âœ“`);
@@ -2708,23 +2744,23 @@ async function copyGroupMembersHydra(cookie, sourceGroupId, targetGroupId, optio
                                 await sleep(jitter(400));
                             }
                         }
-                        
+
                         if (!moveOk) {
                             log(`  âš ï¸ KhÃ´ng thá»ƒ chuyá»ƒn sang nhÃ³m Ä‘Ã­ch`);
                         }
                     }
-                    
+
                     // BÆ¯á»šC 3: Cleanup temp group
-                    try { 
+                    try {
                         await sleep(jitter(500));
-                        await api.disperseGroup(tempGid); 
+                        await api.disperseGroup(tempGid);
                         log(`  ðŸ—‘ Cleanup temp "${tempName}" âœ“`);
                     } catch (_) { }
                 }
-                
+
                 totalProcessed += batch.length;
                 consecutiveFails = 0;
-                
+
             } catch (e) {
                 if (isQuotaExhausted(e.message)) {
                     log(`\n  ðŸ›‘ createGroup CÅ¨NG háº¿t quota: ${e.message}`);
@@ -2839,7 +2875,7 @@ class RLRateLimiter {
                 this._totalSteps = data.totalSteps || 0;
                 this._epsilon = Math.max(0.05, 0.2 - this._totalSteps * 0.0001); // decay epsilon
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -2847,7 +2883,7 @@ class RLRateLimiter {
             const dir = path.dirname(this._qFile);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(this._qFile, JSON.stringify({ qTable: this._qTable, totalSteps: this._totalSteps }));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Discretize continuous state into buckets
@@ -3099,7 +3135,7 @@ class BloomFilter {
             header.writeUInt32LE(this._hashCount, 4);
             header.writeUInt32LE(this._count, 8);
             fs.writeFileSync(this._persistFile, Buffer.concat([header, Buffer.from(this._bits)]));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     load() {
@@ -3117,7 +3153,7 @@ class BloomFilter {
 
     get count() { return this._count; }
     get sizeBytes() { return this._bits.length; }
-    get fillRatio() { 
+    get fillRatio() {
         let set = 0;
         for (let i = 0; i < this._bits.length; i++) {
             let b = this._bits[i];
@@ -3154,7 +3190,7 @@ class CanaryDetector {
                 const data = JSON.parse(fs.readFileSync(this._cFile, 'utf8'));
                 this._knownCanaries = new Set(data.canaries || []);
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -3162,7 +3198,7 @@ class CanaryDetector {
             const dir = path.dirname(this._cFile);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(this._cFile, JSON.stringify({ canaries: [...this._knownCanaries], updatedAt: Date.now() }));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Score a target from 0 (safe) to 1 (very likely canary)
@@ -3284,7 +3320,7 @@ class WebSocketMimicry {
                 const state = states[Math.floor(Math.random() * states.length)];
                 await this._api.setPresence?.(state);
                 this._stats.presenceChanges++;
-            } catch (_) {}
+            } catch (_) { }
         }, 60000 + Math.random() * 120000); // 1-3 minutes
 
         console.log('[WS_MIMIC] Started background session mimicry');
@@ -3296,7 +3332,7 @@ class WebSocketMimicry {
         try {
             await this._api.markMessageRead?.(threadId, messageId);
             this._stats.readReceipts++;
-        } catch (_) {}
+        } catch (_) { }
     }
 
     stop() {
@@ -3524,7 +3560,7 @@ class GeneticMessageOptimizer {
                 this._population = d.population || [];
                 this._generationNum = d.generation || 0;
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -3534,7 +3570,7 @@ class GeneticMessageOptimizer {
             fs.writeFileSync(this._persistFile, JSON.stringify({
                 population: this._population, generation: this._generationNum
             }));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Seed initial population from a base template
@@ -3618,20 +3654,26 @@ class GeneticMessageOptimizer {
     _mutate(template) {
         const mutations = [
             // Add random emoji
-            t => { const emojis = ['ðŸ˜Š','ðŸ‘‹','ðŸŽ‰','ðŸ’ª','ðŸ”¥','âœ¨','ðŸŒŸ','ðŸ’¡','â¤ï¸','ðŸ‘'];
-                   const pos = Math.floor(Math.random() * t.length);
-                   return t.slice(0, pos) + emojis[Math.floor(Math.random() * emojis.length)] + t.slice(pos); },
+            t => {
+                const emojis = ['ðŸ˜Š', 'ðŸ‘‹', 'ðŸŽ‰', 'ðŸ’ª', 'ðŸ”¥', 'âœ¨', 'ðŸŒŸ', 'ðŸ’¡', 'â¤ï¸', 'ðŸ‘'];
+                const pos = Math.floor(Math.random() * t.length);
+                return t.slice(0, pos) + emojis[Math.floor(Math.random() * emojis.length)] + t.slice(pos);
+            },
             // Swap random punctuation
-            t => t.replace(/[!.?]/, () => ['!','.','.','?','~','!'][Math.floor(Math.random() * 6)]),
+            t => t.replace(/[!.?]/, () => ['!', '.', '.', '?', '~', '!'][Math.floor(Math.random() * 6)]),
             // Add greeting variation
-            t => { const greets = ['Xin chÃ o','ChÃ o báº¡n','Hi','Hey','Hello','ChÃ o'];
-                   return t.replace(/^(Xin chÃ o|ChÃ o báº¡n|Hi|Hey|Hello|ChÃ o)/i, greets[Math.floor(Math.random() * greets.length)]); },
+            t => {
+                const greets = ['Xin chÃ o', 'ChÃ o báº¡n', 'Hi', 'Hey', 'Hello', 'ChÃ o'];
+                return t.replace(/^(Xin chÃ o|ChÃ o báº¡n|Hi|Hey|Hello|ChÃ o)/i, greets[Math.floor(Math.random() * greets.length)]);
+            },
             // Shuffle a sentence
-            t => { const sentences = t.split(/[.!?]+/).filter(s => s.trim());
-                   if (sentences.length < 2) return t;
-                   const i = Math.floor(Math.random() * (sentences.length - 1));
-                   [sentences[i], sentences[i+1]] = [sentences[i+1], sentences[i]];
-                   return sentences.join('. ').trim() + '.'; },
+            t => {
+                const sentences = t.split(/[.!?]+/).filter(s => s.trim());
+                if (sentences.length < 2) return t;
+                const i = Math.floor(Math.random() * (sentences.length - 1));
+                [sentences[i], sentences[i + 1]] = [sentences[i + 1], sentences[i]];
+                return sentences.join('. ').trim() + '.';
+            },
         ];
         if (Math.random() < this._mutationRate * 2) { // double chance
             const fn = mutations[Math.floor(Math.random() * mutations.length)];
@@ -3738,7 +3780,7 @@ class IsolationForest {
             this._lastAlert = Date.now();
             const reasons = [];
             if (zRT > 2) reasons.push(`response time ${Math.round(recentAvgRT)}ms (baseline ${Math.round(this._baseline.avgRT)}ms)`);
-            if (zSuccess > 1.5) reasons.push(`success rate ${(recentSuccess*100).toFixed(0)}% (baseline ${(this._baseline.avgSuccess*100).toFixed(0)}%)`);
+            if (zSuccess > 1.5) reasons.push(`success rate ${(recentSuccess * 100).toFixed(0)}% (baseline ${(this._baseline.avgSuccess * 100).toFixed(0)}%)`);
             if (zError > 1.5) reasons.push(`error severity â†‘${recentError.toFixed(1)}`);
             console.log(`[ANOMALY] âš ï¸ Pattern change detected (score=${score.toFixed(2)}): ${reasons.join(', ')}`);
         }
@@ -3952,7 +3994,7 @@ class CircuitBreaker {
         if (c.failCount >= c.threshold) {
             c.state = 'OPEN';
             c.openUntil = Date.now() + c.resetTimeMs;
-            console.log(`[CIRCUIT] âš¡ ${name}: CLOSED â†’ OPEN (${c.failCount} consecutive failures, cooling down ${c.resetTimeMs/1000}s)`);
+            console.log(`[CIRCUIT] âš¡ ${name}: CLOSED â†’ OPEN (${c.failCount} consecutive failures, cooling down ${c.resetTimeMs / 1000}s)`);
         }
     }
 
@@ -4094,7 +4136,7 @@ class EMAForecaster {
                 const d = JSON.parse(fs.readFileSync(this._persistFile, 'utf8'));
                 this._hourlyData = d.hourlyData || {};
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -4102,7 +4144,7 @@ class EMAForecaster {
             const dir = path.dirname(this._persistFile);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(this._persistFile, JSON.stringify({ hourlyData: this._hourlyData, savedAt: Date.now() }));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Record an observation (success rate for current hour)
@@ -4204,7 +4246,7 @@ class ABTestFramework {
             if (fs.existsSync(this._persistFile)) {
                 this._tests = JSON.parse(fs.readFileSync(this._persistFile, 'utf8'));
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -4212,7 +4254,7 @@ class ABTestFramework {
             const dir = path.dirname(this._persistFile);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(this._persistFile, JSON.stringify(this._tests));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Create a new A/B test
@@ -4271,20 +4313,20 @@ class ABTestFramework {
         if (test.variants.some(v => v.sends < test.minSamples)) return;
 
         // Z-test between top 2
-        const sorted = [...test.variants].sort((a, b) => (b.successes/b.sends) - (a.successes/a.sends));
+        const sorted = [...test.variants].sort((a, b) => (b.successes / b.sends) - (a.successes / a.sends));
         if (sorted.length < 2) return;
 
         const p1 = sorted[0].successes / sorted[0].sends;
         const p2 = sorted[1].successes / sorted[1].sends;
         const n1 = sorted[0].sends, n2 = sorted[1].sends;
         const pooledP = (sorted[0].successes + sorted[1].successes) / (n1 + n2);
-        const se = Math.sqrt(pooledP * (1 - pooledP) * (1/n1 + 1/n2));
+        const se = Math.sqrt(pooledP * (1 - pooledP) * (1 / n1 + 1 / n2));
 
         if (se > 0) {
             const z = (p1 - p2) / se;
             if (z > 1.96) { // 95% confidence
                 test.winner = sorted[0].name;
-                console.log(`[AB] âœ… Winner for "${testName}": ${sorted[0].name} (${(p1*100).toFixed(1)}% vs ${(p2*100).toFixed(1)}%, z=${z.toFixed(2)})`);
+                console.log(`[AB] âœ… Winner for "${testName}": ${sorted[0].name} (${(p1 * 100).toFixed(1)}% vs ${(p2 * 100).toFixed(1)}%, z=${z.toFixed(2)})`);
                 this._save();
             }
         }
@@ -4452,7 +4494,7 @@ class BayesianOptimizer {
                 this._bestParams = d.bestParams;
                 this._bestScore = d.bestScore || -Infinity;
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -4463,7 +4505,7 @@ class BayesianOptimizer {
                 observations: this._observations.slice(-200), // cap history
                 bestParams: this._bestParams, bestScore: this._bestScore,
             }));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Suggest next params to try (acquisition function: UCB)
@@ -4556,7 +4598,7 @@ class ReputationSystem {
             if (fs.existsSync(this._persistFile)) {
                 this._scores = JSON.parse(fs.readFileSync(this._persistFile, 'utf8'));
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _save() {
@@ -4564,7 +4606,7 @@ class ReputationSystem {
             const dir = path.dirname(this._persistFile);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(this._persistFile, JSON.stringify(this._scores));
-        } catch (_) {}
+        } catch (_) { }
     }
 
     _ensureAccount(accountId) {
@@ -5068,7 +5110,7 @@ class AccountPool {
         if (this.accounts.length <= 1) return false;
         const now = Date.now();
         if (this._lastRotateTime && (now - this._lastRotateTime) < 30000 && reason === 'wave_break') {
-            console.log(`[POOL] Skipping rotation (too fast, ${Math.round((now - this._lastRotateTime)/1000)}s since last)`);
+            console.log(`[POOL] Skipping rotation (too fast, ${Math.round((now - this._lastRotateTime) / 1000)}s since last)`);
             return false;
         }
         this._lastRotateTime = now;
@@ -5225,7 +5267,7 @@ async function sendBulkSmart(cookie, params, prog) {
             if (h === 12 && !this._lunchPaused && Math.random() < 0.30) {
                 const pauseMs = (5 + Math.random() * 10) * 60 * 1000;
                 this._lunchPaused = true;
-                log(`[TimeGuard] Lunch break: ${Math.round(pauseMs/60000)}m`);
+                log(`[TimeGuard] Lunch break: ${Math.round(pauseMs / 60000)}m`);
                 await sleep(pauseMs);
                 this._lunchPaused = false;
             }
@@ -5238,7 +5280,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 const waitMs = h < 8
                     ? (8 - h) * 3600000
                     : (24 + 8 - h) * 3600000;
-                log(`[TimeGuard] NgoÃ i giá» (${h}h) â†’ chá» Ä‘áº¿n 8h sÃ¡ng (${Math.round(waitMs/3600000)}h)`);
+                log(`[TimeGuard] NgoÃ i giá» (${h}h) â†’ chá» Ä‘áº¿n 8h sÃ¡ng (${Math.round(waitMs / 3600000)}h)`);
                 if (prog) prog({ phase: 'cooldown', status: `[TimeGuard] NgoÃ i giá» gá»­i (${h}h) â†’ chá»...` });
                 await sleep(Math.min(waitMs, 30 * 60 * 1000)); // check láº¡i má»—i 30 phÃºt
             }
@@ -5251,11 +5293,11 @@ async function sendBulkSmart(cookie, params, prog) {
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const PersonaEngine = {
         _personas: [
-            { name: 'friendly',      prefix: ['Báº¡n Æ¡i!', 'Hey Ä‘Ã³!', 'ChÃ o báº¡n nÃ©~', 'Hi hi Ä‘Ã³!'], suffix: ['ðŸ˜Š', 'â¤ï¸', ''] },
-            { name: 'professional',  prefix: ['Xin chÃ o,', 'KÃ­nh gá»­i báº¡n,', 'ChÃ o,', 'ThÃ¢n máº¿n,'], suffix: ['TrÃ¢n trá»ng.', 'Cáº£m Æ¡n.', ''] },
-            { name: 'casual',        prefix: ['Ã”i báº¡n Æ¡i', 'NhÃ¢n tiá»‡n', 'Tiá»‡n há»i', 'CÃ³ cÃ¡i nÃ y'], suffix: ['ha ðŸ˜„', 'nhÃ©!', 'nha!'] },
-            { name: 'storyteller',   prefix: ['MÃ¬nh vá»«a', 'HÃ´m nay mÃ¬nh', 'Gáº§n Ä‘Ã¢y mÃ¬nh', 'MÃ¬nh Ä‘ang'], suffix: ['tháº¥y hay láº¯m â­', 'báº¡n cÃ³ thá»­ khÃ´ng?', ''] },
-            { name: 'curious',       prefix: ['Báº¡n cÃ³ biáº¿t', 'Báº¡n tá»«ng nghe', 'Thá»­ há»i', 'Äá»‘i vá»›i báº¡n thÃ¬'], suffix: ['báº¡n cÃ³ nghÄ© váº­y khÃ´ng?', 'theo báº¡n tháº¿ nÃ o?', '?'] },
+            { name: 'friendly', prefix: ['Báº¡n Æ¡i!', 'Hey Ä‘Ã³!', 'ChÃ o báº¡n nÃ©~', 'Hi hi Ä‘Ã³!'], suffix: ['ðŸ˜Š', 'â¤ï¸', ''] },
+            { name: 'professional', prefix: ['Xin chÃ o,', 'KÃ­nh gá»­i báº¡n,', 'ChÃ o,', 'ThÃ¢n máº¿n,'], suffix: ['TrÃ¢n trá»ng.', 'Cáº£m Æ¡n.', ''] },
+            { name: 'casual', prefix: ['Ã”i báº¡n Æ¡i', 'NhÃ¢n tiá»‡n', 'Tiá»‡n há»i', 'CÃ³ cÃ¡i nÃ y'], suffix: ['ha ðŸ˜„', 'nhÃ©!', 'nha!'] },
+            { name: 'storyteller', prefix: ['MÃ¬nh vá»«a', 'HÃ´m nay mÃ¬nh', 'Gáº§n Ä‘Ã¢y mÃ¬nh', 'MÃ¬nh Ä‘ang'], suffix: ['tháº¥y hay láº¯m â­', 'báº¡n cÃ³ thá»­ khÃ´ng?', ''] },
+            { name: 'curious', prefix: ['Báº¡n cÃ³ biáº¿t', 'Báº¡n tá»«ng nghe', 'Thá»­ há»i', 'Äá»‘i vá»›i báº¡n thÃ¬'], suffix: ['báº¡n cÃ³ nghÄ© váº­y khÃ´ng?', 'theo báº¡n tháº¿ nÃ o?', '?'] },
         ],
         _currentPersona: 0,
         _msgCountPerPersona: 0,
@@ -5365,7 +5407,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 allFriends.push(...fl.map(f => String(f.uid || f.userId || '')));
                 if (fl.length < 500) break; // last page
             }
-        } catch (_) {}
+        } catch (_) { }
         const friendSet = new Set(allFriends);
 
         if (params.inputType === 'phones') {
@@ -5385,7 +5427,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     if (v.ts && (now - v.ts) > CACHE_TTL) { delete phoneCache[k]; cleaned++; }
                 }
                 if (cleaned > 0) log(`[CACHE] Cleaned ${cleaned} expired entries`);
-            } catch(_){}
+            } catch (_) { }
 
             // Stats tracking
             let statFormat = 0, statCache = 0, statApi = 0, statTimeout = 0, statNotFound = 0;
@@ -5401,11 +5443,11 @@ async function sendBulkSmart(cookie, params, prog) {
                 if (!phone.startsWith('0') && phone.length === 9) phone = '0' + phone;
 
                 // Layer 3: Pre-validate Vietnamese mobile format
-                const validPrefixes = ['03','05','07','08','09'];
+                const validPrefixes = ['03', '05', '07', '08', '09'];
                 const isValidFormat = phone.length === 10 && validPrefixes.some(p => phone.startsWith(p));
                 if (!isValidFormat) {
                     statFormat++;
-                    log(`[RESOLVE] Skip ${phone} (format: len=${phone.length}, prefix=${phone.slice(0,2)})`);
+                    log(`[RESOLVE] Skip ${phone} (format: len=${phone.length}, prefix=${phone.slice(0, 2)})`);
                     prog({ phase: 'resolve', status: `âŠ˜ ${phone} (sai format)`, failed: phone });
                     continue;
                 }
@@ -5417,7 +5459,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         targets.push({ uid: String(cached.uid), name: cached.name || `SÄT_${phone}`, phone });
                         statCache++;
                         continue;
-                    } else if (cached.notFound && Date.now() - cached.ts < 24*60*60*1000) {
+                    } else if (cached.notFound && Date.now() - cached.ts < 24 * 60 * 60 * 1000) {
                         // Cached "not found" within 24h â†’ skip
                         statNotFound++;
                         continue;
@@ -5466,7 +5508,7 @@ async function sendBulkSmart(cookie, params, prog) {
             }
 
             // Save cache
-            try { require('fs').writeFileSync(CACHE_FILE, JSON.stringify(phoneCache)); } catch(_){}
+            try { require('fs').writeFileSync(CACHE_FILE, JSON.stringify(phoneCache)); } catch (_) { }
 
             const resolvedCount = targets.length;
             const failedCount = phones.length - resolvedCount;
@@ -5555,7 +5597,7 @@ async function sendBulkSmart(cookie, params, prog) {
                                             }
                                         }
                                         if (c + 50 < idsArr.length) await sleep(500);
-                                    } catch (_) {}
+                                    } catch (_) { }
                                     prog({ phase: 'resolve', status: `S1 enrich: ${enriched}/${allIds.size} names`, pct: 5 + Math.round((c / idsArr.length) * 10) });
                                 }
                                 log(`[S1] Enriched ${enriched}/${allIds.size} with display names`);
@@ -5600,7 +5642,7 @@ async function sendBulkSmart(cookie, params, prog) {
                                         }
                                     }
                                     await sleep(300);
-                                } catch (_) {}
+                                } catch (_) { }
                             }
                         }
                         log(`[S3] Polls: ${voterCount} voter entries`);
@@ -5640,7 +5682,7 @@ async function sendBulkSmart(cookie, params, prog) {
             try {
                 const ownUid = String(api.getOwnId() || '');
                 if (ownUid) targets = targets.filter(t => t.uid !== ownUid);
-            } catch (_) {}
+            } catch (_) { }
 
             // Filter out group admins (trÆ°á»Ÿng + phÃ³ nhÃ³m)
             try {
@@ -5678,7 +5720,7 @@ async function sendBulkSmart(cookie, params, prog) {
             for (const [uid, ts] of Object.entries(stored)) {
                 if (ts > cutoff) sentHistory.add(uid);
             }
-        } catch (_) {}
+        } catch (_) { }
         const beforeSkip = targets.length;
         if (sentHistory.size > 0) {
             targets = targets.filter(t => !sentHistory.has(t.uid));
@@ -5690,10 +5732,10 @@ async function sendBulkSmart(cookie, params, prog) {
         function saveSentUid(uid) {
             try {
                 let stored = {};
-                try { stored = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.zalo_sent_history.json'), 'utf8') || '{}'); } catch(_){}
+                try { stored = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.zalo_sent_history.json'), 'utf8') || '{}'); } catch (_) { }
                 stored[uid] = Date.now();
                 require('fs').writeFileSync(require('path').join(require('os').homedir(), '.zalo_sent_history.json'), JSON.stringify(stored));
-            } catch(_){}
+            } catch (_) { }
         }
 
         // â”€â”€ Deduplicate â”€â”€
@@ -5743,7 +5785,7 @@ async function sendBulkSmart(cookie, params, prog) {
         log(`[V2] MarkovTimer + AdaptiveBatch initialized`);
 
         // â•â•â• Text Variation â•â•â•
-        const tailEmoji = ['\u{1F60A}','\u{1F44D}','\u{2705}','\u{1F389}','\u{1F4AF}','\u{1F525}','\u{2B50}','\u{1F4AA}','\u{1F64F}','\u{2764}','\u{1F44B}','\u{1F31F}','\u{1F4AC}','\u{1F4CC}','\u{1F4E2}'];
+        const tailEmoji = ['\u{1F60A}', '\u{1F44D}', '\u{2705}', '\u{1F389}', '\u{1F4AF}', '\u{1F525}', '\u{2B50}', '\u{1F4AA}', '\u{1F64F}', '\u{2764}', '\u{1F44B}', '\u{1F31F}', '\u{1F4AC}', '\u{1F4CC}', '\u{1F4E2}'];
         const tailWords = ['a', 'nhe', 'nha', 'ha', 'hen', 'nghen', 'ban nhe', 'ne', 'do', 'luon', 'hen ban'];
 
         function fingerprint(m, idx) {
@@ -5754,7 +5796,7 @@ async function sendBulkSmart(cookie, params, prog) {
             else if (rand < 0.6) r = r + ' ' + tailWords[Math.floor(Math.random() * tailWords.length)];
             else if (rand < 0.8) {
                 // Invisible Unicode separator (zero-width chars) â€” each message unique to Zalo hash
-                const zwc = ['\u200B','\u200C','\u200D','\uFEFF'];
+                const zwc = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
                 let invisible = '';
                 for (let b = 0; b < 3 + (idx % 4); b++) invisible += zwc[Math.floor(Math.random() * zwc.length)];
                 r = r + invisible;
@@ -5795,7 +5837,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     await noiseActions[Math.floor(Math.random() * noiseActions.length)]();
                     if (count > 1) await sleep(300 + Math.random() * 700);
                 }
-            } catch (_) {}
+            } catch (_) { }
             await sleep(500 + Math.random() * 1500);
         }
 
@@ -5804,7 +5846,7 @@ async function sendBulkSmart(cookie, params, prog) {
             try {
                 await api.getUserInfo(uid);
                 await sleep(500 + Math.random() * 1000); // "reading" profile
-            } catch (_) {}
+            } catch (_) { }
         }
 
         // â•â•â• Human Delay Pattern â•â•â•
@@ -5869,7 +5911,7 @@ async function sendBulkSmart(cookie, params, prog) {
                             const adminSet = new Set();
                             if (gInfo.creatorId) adminSet.add(String(gInfo.creatorId));
                             if (gInfo.adminIds) gInfo.adminIds.forEach(id => adminSet.add(String(id)));
-                            try { const ownUid = String(api.getOwnId()); adminSet.add(ownUid); } catch(_){}
+                            try { const ownUid = String(api.getOwnId()); adminSet.add(ownUid); } catch (_) { }
 
                             // Batch enrich names for IDs not in currentMems
                             const existingUids = new Set(newTargets.map(t => t.uid));
@@ -5883,7 +5925,7 @@ async function sendBulkSmart(cookie, params, prog) {
                                             newTargets.push({ uid, name: p.displayName || p.zaloName || `UID_${uid.slice(-6)}`, phone: '' });
                                         }
                                     }
-                                } catch(_){}
+                                } catch (_) { }
                             }
 
                             // Filter admins
@@ -5896,7 +5938,7 @@ async function sendBulkSmart(cookie, params, prog) {
                                 const raw = JSON.parse(require('fs').readFileSync(sentHistFile, 'utf8'));
                                 const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
                                 for (const [uid, ts] of Object.entries(raw)) { if (ts > cutoff) sentUids.add(uid); }
-                            } catch(_){}
+                            } catch (_) { }
                             const final = filtered.filter(t => !sentUids.has(t.uid));
 
                             if (final.length > 0) {
@@ -5962,9 +6004,9 @@ async function sendBulkSmart(cookie, params, prog) {
             // Há»‡ sá»‘ tá»‘c Ä‘á»™ theo giá» (1.0 = bÃ¬nh thÆ°á»ng, <1 = nhanh hÆ¡n, >1 = cháº­m hÆ¡n)
             getSpeedMultiplier() {
                 const h = new Date().getHours();
-                if (h >= 0 && h < 6)   return 0;     // STOP â€” khÃ´ng gá»­i ban Ä‘Ãªm
-                if (h >= 6 && h < 8)   return 2.5;   // sÃ¡ng sá»›m: ráº¥t cháº­m
-                if (h >= 8 && h < 10)  return 1.5;   // warm-up buá»•i sÃ¡ng
+                if (h >= 0 && h < 6) return 0;     // STOP â€” khÃ´ng gá»­i ban Ä‘Ãªm
+                if (h >= 6 && h < 8) return 2.5;   // sÃ¡ng sá»›m: ráº¥t cháº­m
+                if (h >= 8 && h < 10) return 1.5;   // warm-up buá»•i sÃ¡ng
                 if (h >= 10 && h < 12) return 1.0;   // bÃ¬nh thÆ°á»ng
                 if (h >= 12 && h < 14) return 0.7;   // peak lunch â†’ nhanh hÆ¡n
                 if (h >= 14 && h < 17) return 1.0;   // chiá»u
@@ -5980,8 +6022,8 @@ async function sendBulkSmart(cookie, params, prog) {
                 const h = new Date().getHours();
                 if (h >= 17 && h < 20) return 'ðŸ”¥ GOLDEN HOUR';
                 if (h >= 12 && h < 14) return 'ðŸœ PEAK LUNCH';
-                if (h >= 6 && h < 8)   return 'ðŸŒ… WARM-UP';
-                if (h >= 22 || h < 6)  return 'ðŸŒ™ OFF-HOURS';
+                if (h >= 6 && h < 8) return 'ðŸŒ… WARM-UP';
+                if (h >= 22 || h < 6) return 'ðŸŒ™ OFF-HOURS';
                 return 'â˜€ï¸ NORMAL';
             }
         };
@@ -5993,7 +6035,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 try {
                     if (fs.existsSync(_EP_STATS_FILE))
                         return JSON.parse(fs.readFileSync(_EP_STATS_FILE, 'utf8'));
-                } catch(_){}
+                } catch (_) { }
                 return {};
             })(),
             record(endpoint, userType, success) {
@@ -6006,7 +6048,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     const dir = path.dirname(_EP_STATS_FILE);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(_EP_STATS_FILE, JSON.stringify(this.stats));
-                } catch(_){}
+                } catch (_) { }
             },
             getBestOrder(userType) {
                 const endpoints = ['inviteUser', 'addUser', 'sendLink'];
@@ -6087,7 +6129,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     const related = await api.getRelatedFriendGroup(uid);
                     if (related && Array.isArray(related)) mutualCount = related.length;
                     else if (related && related.friends) mutualCount = related.friends.length;
-                } catch(_){}
+                } catch (_) { }
                 scored.push({ uid, mutualCount });
                 await sleep(200 + Math.random() * 300); // avoid rate limit on lookups
             }
@@ -6106,14 +6148,14 @@ async function sendBulkSmart(cookie, params, prog) {
                     if (fs.existsSync(this.WARM_FILE)) {
                         this.data = JSON.parse(fs.readFileSync(this.WARM_FILE, 'utf8'));
                     }
-                } catch(_){}
+                } catch (_) { }
             },
             save() {
                 try {
                     const dir = path.dirname(this.WARM_FILE);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(this.WARM_FILE, JSON.stringify(this.data, null, 2));
-                } catch(_){}
+                } catch (_) { }
             },
             getAccountAge(accountId) {
                 if (!this.data[accountId]) {
@@ -6174,7 +6216,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 } else {
                     ok.push(...uids);
                 }
-            } catch(e) {
+            } catch (e) {
                 log(`[BATCH] Batch fail: ${e.message}`);
                 fail.push(...uids);
             }
@@ -6189,32 +6231,32 @@ async function sendBulkSmart(cookie, params, prog) {
                 if (age > 3) return; // TK cÅ© â†’ skip
 
                 log(`[TRUST] TK age=${Math.floor(age)}d â†’ running trust warmup...`);
-                prog({ phase: 'cooldown', status: `ðŸŽ­ XÃ¢y dá»±ng trust cho TK má»›i (ngÃ y ${Math.floor(age)+1})...`, pct: 45 });
+                prog({ phase: 'cooldown', status: `ðŸŽ­ XÃ¢y dá»±ng trust cho TK má»›i (ngÃ y ${Math.floor(age) + 1})...`, pct: 45 });
 
                 const actions = [];
 
                 // NgÃ y 1: browse only
                 if (age < 1) {
                     actions.push(
-                        async () => { try { await api.getProfile(); log('[TRUST] Viewed own profile'); } catch(_){} },
-                        async () => { try { await api.getAllFriends(10, 1); log('[TRUST] Browsed friends list'); } catch(_){} },
-                        async () => { try { await api.getRecentGroup(); log('[TRUST] Browsed recent groups'); } catch(_){} },
+                        async () => { try { await api.getProfile(); log('[TRUST] Viewed own profile'); } catch (_) { } },
+                        async () => { try { await api.getAllFriends(10, 1); log('[TRUST] Browsed friends list'); } catch (_) { } },
+                        async () => { try { await api.getRecentGroup(); log('[TRUST] Browsed recent groups'); } catch (_) { } },
                     );
                 }
                 // NgÃ y 2: browse + interact
                 else if (age < 2) {
                     actions.push(
-                        async () => { try { await api.getProfile(); } catch(_){} },
-                        async () => { try { await api.getAllFriends(50, 1); } catch(_){} },
-                        async () => { try { await api.getRecentGroup(); } catch(_){} },
-                        async () => { try { await api.getStickers(); log('[TRUST] Browsed stickers'); } catch(_){} },
+                        async () => { try { await api.getProfile(); } catch (_) { } },
+                        async () => { try { await api.getAllFriends(50, 1); } catch (_) { } },
+                        async () => { try { await api.getRecentGroup(); } catch (_) { } },
+                        async () => { try { await api.getStickers(); log('[TRUST] Browsed stickers'); } catch (_) { } },
                     );
                 }
                 // NgÃ y 3: ready for light invite
                 else {
                     actions.push(
-                        async () => { try { await api.getProfile(); } catch(_){} },
-                        async () => { try { await api.getAllFriends(100, 1); } catch(_){} },
+                        async () => { try { await api.getProfile(); } catch (_) { } },
+                        async () => { try { await api.getAllFriends(100, 1); } catch (_) { } },
                     );
                 }
 
@@ -6224,7 +6266,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     await action();
                     await sleep(2000 + Math.random() * 3000);
                 }
-                log(`[TRUST] Warmup done (${actions.length} actions for day ${Math.floor(age)+1})`);
+                log(`[TRUST] Warmup done (${actions.length} actions for day ${Math.floor(age) + 1})`);
             }
         };
 
@@ -6245,10 +6287,10 @@ async function sendBulkSmart(cookie, params, prog) {
 
                 const possibleActions = [
                     // BUG FIX: all wrapped in try/catch â€” APIs may not exist on api object
-                    async () => { try { await api.getProfile(); } catch(_){} return 'view_profile'; },
-                    async () => { try { await api.getAllFriends(10, 1); } catch(_){} return 'browse_friends'; },
-                    async () => { try { await api.getRecentGroup?.(); } catch(_){} return 'browse_groups'; },
-                    async () => { try { await api.getStickers?.(); } catch(_){} return 'browse_stickers'; },
+                    async () => { try { await api.getProfile(); } catch (_) { } return 'view_profile'; },
+                    async () => { try { await api.getAllFriends(10, 1); } catch (_) { } return 'browse_friends'; },
+                    async () => { try { await api.getRecentGroup?.(); } catch (_) { } return 'browse_groups'; },
+                    async () => { try { await api.getStickers?.(); } catch (_) { } return 'browse_stickers'; },
                     async () => {
                         try {
                             const friends = await api.getAllFriends(5, 1);
@@ -6257,7 +6299,7 @@ async function sendBulkSmart(cookie, params, prog) {
                                 const uid = String(f.uid || f.userId || '');
                                 if (uid) await api.sendTypingEvent(uid, ThreadType.User);
                             }
-                        } catch(_){}
+                        } catch (_) { }
                         return 'typing_sim';
                     },
                 ];
@@ -6268,7 +6310,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         const action = possibleActions[Math.floor(Math.random() * possibleActions.length)];
                         const name = await action();
                         this.actionsPerformed++;
-                    } catch(_){}
+                    } catch (_) { }
                     await sleep(500 + Math.random() * 1500);
                 }
                 return numActions;
@@ -6285,14 +6327,14 @@ async function sendBulkSmart(cookie, params, prog) {
                     if (fs.existsSync(this.SEED_FILE)) {
                         this.data = JSON.parse(fs.readFileSync(this.SEED_FILE, 'utf8'));
                     }
-                } catch(_){}
+                } catch (_) { }
             },
             save() {
                 try {
                     const dir = path.dirname(this.SEED_FILE);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(this.SEED_FILE, JSON.stringify(this.data, null, 2));
-                } catch(_){}
+                } catch (_) { }
             },
             async seedFriends(api, acctId, acctAge) {
                 // Chá»‰ seed cho TK má»›i (< 3 ngÃ y) vÃ  chÆ°a seed Ä‘á»§
@@ -6311,7 +6353,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 if (this.data[acctId].lastSeed === today) return;
 
                 const toSeed = Math.min(10, SEED_TARGET - already); // max 10/session
-                log(`[SEED] Seeding ${toSeed} friends for new account (day ${Math.floor(acctAge)+1})...`);
+                log(`[SEED] Seeding ${toSeed} friends for new account (day ${Math.floor(acctAge) + 1})...`);
                 prog({ phase: 'cooldown', status: `ðŸŒ± XÃ¢y dá»±ng máº¡ng xÃ£ há»™i: thÃªm ${toSeed} báº¡n...`, pct: 40 });
 
                 let seeded = 0;
@@ -6326,7 +6368,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         await api.sendFriendRequest('Xin chÃ o!', t.uid);
                         seeded++;
                         log(`[SEED] FR sent â†’ ${t.name} (${seeded}/${toSeed})`);
-                    } catch(_){}
+                    } catch (_) { }
                     await sleep(3000 + Math.random() * 5000); // slow â€” avoid spam
                 }
 
@@ -6352,14 +6394,14 @@ async function sendBulkSmart(cookie, params, prog) {
             const BL_FILE = path.join(process.env.APPDATA || os.homedir(), 'Zalo Bulk Tool Pro', '.blacklist.json');
             let bl = new Set();
             // Load on init
-            try { if (fs.existsSync(BL_FILE)) bl = new Set(JSON.parse(fs.readFileSync(BL_FILE,'utf8'))); } catch(_){}
+            try { if (fs.existsSync(BL_FILE)) bl = new Set(JSON.parse(fs.readFileSync(BL_FILE, 'utf8'))); } catch (_) { }
 
             function save() {
                 try {
                     const dir = path.dirname(BL_FILE);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(BL_FILE, JSON.stringify([...bl]));
-                } catch(_){}
+                } catch (_) { }
             }
             return {
                 isBlacklisted: (uid) => bl.has(String(uid)),
@@ -6375,11 +6417,11 @@ async function sendBulkSmart(cookie, params, prog) {
                 // Auto-detect block errors and add to blacklist
                 checkError: (uid, errCode, errMsg = '') => {
                     const BLOCK_CODES = [-216, -501, -1012, -1013, -1014, 14, 502];
-                    const BLOCK_MSGS  = ['spam', 'block', 'restrict', 'banned', 'khÃ´ng thá»ƒ gá»­i', 'bá»‹ cháº·n'];
+                    const BLOCK_MSGS = ['spam', 'block', 'restrict', 'banned', 'khÃ´ng thá»ƒ gá»­i', 'bá»‹ cháº·n'];
                     const isBlockCode = BLOCK_CODES.includes(Number(errCode));
-                    const isBlockMsg  = BLOCK_MSGS.some(m => errMsg.toLowerCase().includes(m));
+                    const isBlockMsg = BLOCK_MSGS.some(m => errMsg.toLowerCase().includes(m));
                     if (isBlockCode || isBlockMsg) {
-                        blacklistManager.add(uid, `err:${errCode} ${errMsg.slice(0,30)}`);
+                        blacklistManager.add(uid, `err:${errCode} ${errMsg.slice(0, 30)}`);
                         return true;
                     }
                     return false;
@@ -6411,7 +6453,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     // Still resting?
                     if (Date.now() < s.rested_until) {
                         const mins = Math.round((s.rested_until - Date.now()) / 60000);
-                        log(`[HEALTH] Account ${key(cookie).slice(0,10)}... resting ${mins}m more`);
+                        log(`[HEALTH] Account ${key(cookie).slice(0, 10)}... resting ${mins}m more`);
                         return false;
                     }
                     const total = s.ok + s.fail;
@@ -6420,7 +6462,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     if (failRate > ERROR_THRESHOLD) {
                         s.rested_until = Date.now() + REST_MS;
                         s.ok = 0; s.fail = 0; // reset counters after rest
-                        log(`[HEALTH] âš ï¸ Account ${key(cookie).slice(0,10)}... failRate=${(failRate*100).toFixed(0)}% â†’ RESTING 24h`);
+                        log(`[HEALTH] âš ï¸ Account ${key(cookie).slice(0, 10)}... failRate=${(failRate * 100).toFixed(0)}% â†’ RESTING 24h`);
                         return false;
                     }
                     return true;
@@ -6428,14 +6470,14 @@ async function sendBulkSmart(cookie, params, prog) {
                 recordHardBan: (cookie) => {
                     const s = ensure(cookie);
                     s.rested_until = Date.now() + REST_MS;
-                    log(`[HEALTH] ðŸ”´ Hard ban detected â†’ forcing 24h rest: ${key(cookie).slice(0,10)}...`);
+                    log(`[HEALTH] ðŸ”´ Hard ban detected â†’ forcing 24h rest: ${key(cookie).slice(0, 10)}...`);
                 },
                 getSummary: () => {
                     return [...stats.entries()].map(([k, s]) => {
                         const total = s.ok + s.fail;
-                        const rate  = total > 0 ? ((s.fail/total)*100).toFixed(0) : '?';
+                        const rate = total > 0 ? ((s.fail / total) * 100).toFixed(0) : '?';
                         const resting = Date.now() < s.rested_until;
-                        return `${k.slice(0,8)}: ${s.ok}âœ…/${s.fail}âŒ (${rate}% fail)${resting?'[REST]':''}`;
+                        return `${k.slice(0, 8)}: ${s.ok}âœ…/${s.fail}âŒ (${rate}% fail)${resting ? '[REST]' : ''}`;
                     }).join(' | ');
                 }
             };
@@ -6462,7 +6504,7 @@ async function sendBulkSmart(cookie, params, prog) {
             },
             // Sort targets: ngÆ°á»i Ä‘ang trong active window â†’ lÃªn Ä‘áº§u
             prioritize(targets) {
-                const active  = targets.filter(t => this.isActiveNow(t.lastSeen));
+                const active = targets.filter(t => this.isActiveNow(t.lastSeen));
                 const passive = targets.filter(t => !this.isActiveNow(t.lastSeen));
                 const activeCount = active.length;
                 log(`[TIME-TARGET] ${activeCount}/${targets.length} targets trong giá» active â†’ Æ°u tiÃªn gá»­i trÆ°á»›c`);
@@ -6474,8 +6516,8 @@ async function sendBulkSmart(cookie, params, prog) {
         // BÃ¡o cÃ¡o real-time qua Telegram Bot
         const telegramTelemetry = (() => {
             const botToken = params.telegramToken || '';
-            const chatId   = params.telegramChatId || '';
-            const enabled  = !!(botToken && chatId);
+            const chatId = params.telegramChatId || '';
+            const enabled = !!(botToken && chatId);
             let stats = { sent: 0, ok: 0, fail: 0, invite: 0, banned: 0, start: Date.now() };
             let lastReport = 0;
             const REPORT_EVERY = params.telegramReportEvery || 20; // má»—i 20 tin
@@ -6489,7 +6531,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
                     });
-                } catch(e) { log(`[TG] Send failed: ${e.message}`); }
+                } catch (e) { log(`[TG] Send failed: ${e.message}`); }
             }
 
             return {
@@ -6504,7 +6546,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 },
                 async report(prefix = '') {
                     const elapsed = Math.round((Date.now() - stats.start) / 60000);
-                    const successRate = stats.sent > 0 ? ((stats.ok/stats.sent)*100).toFixed(0) : '?';
+                    const successRate = stats.sent > 0 ? ((stats.ok / stats.sent) * 100).toFixed(0) : '?';
                     const msg = [
                         `${prefix ? prefix + '\n' : ''}ðŸ¤– <b>Zalo Tool Update</b>`,
                         `ðŸ“¤ Gá»­i: <b>${stats.sent}</b>`,
@@ -6589,7 +6631,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         lastMsgId = newLastId;
 
                         await sleep(300 + Math.random() * 200);
-                    } catch(e) {
+                    } catch (e) {
                         log(`[HARVEST] History fail page ${pages}: ${e.message}`);
                         break;
                     }
@@ -6611,7 +6653,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 try {
                     if (fs.existsSync(DEDUP_FILE))
                         globalDedup = new Set(JSON.parse(fs.readFileSync(DEDUP_FILE, 'utf8')));
-                } catch(_){}
+                } catch (_) { }
 
                 const allMembers = [];
                 log(`[HARVEST] QuÃ©t ${groupLinks.length} groups (láº¥y ngÆ°á»i chat gáº§n nháº¥t)...`);
@@ -6623,7 +6665,7 @@ async function sendBulkSmart(cookie, params, prog) {
 
                     prog({
                         phase: 'cooldown',
-                        status: `ðŸ” QuÃ©t group ${i+1}/${groupLinks.length} â€” ${link.slice(-10)} (recent chatters)...`,
+                        status: `ðŸ” QuÃ©t group ${i + 1}/${groupLinks.length} â€” ${link.slice(-10)} (recent chatters)...`,
                         pct: Math.round(i / groupLinks.length * 40)
                     });
 
@@ -6647,7 +6689,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     const dir = path.dirname(DEDUP_FILE);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(DEDUP_FILE, JSON.stringify([...globalDedup]));
-                } catch(_){}
+                } catch (_) { }
 
                 log(`[HARVEST] Xong: ${allMembers.length} ngÆ°á»i chat gáº§n nháº¥t tá»« ${groupLinks.length} groups`);
                 return allMembers;
@@ -6684,7 +6726,7 @@ async function sendBulkSmart(cookie, params, prog) {
                                 // Has mutual friends indicator
                                 if (u.mutual || u.mutualFriends) score = Math.max(score, 2);
                             }
-                        } catch(_){ score = 1; }
+                        } catch (_) { score = 1; }
                         await sleep(150 + Math.random() * 150);
                     }
                     scored.push({ ...m, chatScore: score });
@@ -6744,13 +6786,13 @@ async function sendBulkSmart(cookie, params, prog) {
                 const total = scores.reduce((s, x) => s + x.score, 0);
                 let rand = Math.random() * total;
                 for (const s of scores) { rand -= s.score; if (rand <= 0) return { msg: s.msg, idx: s.idx }; }
-                return { msg: scores[scores.length-1].msg, idx: scores.length-1 };
+                return { msg: scores[scores.length - 1].msg, idx: scores.length - 1 };
             },
             getSummary() {
                 const gSummary = Object.entries(this.groupWeights).map(([g, w]) =>
-                    `G${g.slice(-4)}:${w.ok}/${w.ok+w.fail}`).join(' ');
+                    `G${g.slice(-4)}:${w.ok}/${w.ok + w.fail}`).join(' ');
                 const mSummary = Object.entries(this.messageWeights).map(([i, w]) =>
-                    `M${i}:${w.ok}/${w.ok+w.fail}`).join(' ');
+                    `M${i}:${w.ok}/${w.ok + w.fail}`).join(' ');
                 return `Groups[${gSummary}] Msgs[${mSummary}]`;
             }
         };
@@ -6763,23 +6805,23 @@ async function sendBulkSmart(cookie, params, prog) {
         // QuÃ©t SÄT VN ngáº«u nhiÃªn â†’ tÃ¬m user Zalo má»›i â†’ tá»± má»Ÿ rá»™ng target list
         const phoneScanner = {
             // Äáº§u sá»‘ VN phá»• biáº¿n nháº¥t (Viettel, Mobi, Vina, Gmobile, Reddi)
-            PREFIXES: ['032','033','034','035','036','037','038','039',
-                       '070','076','077','078','079','086','089','090',
-                       '091','092','093','094','096','097','098','056','058'],
+            PREFIXES: ['032', '033', '034', '035', '036', '037', '038', '039',
+                '070', '076', '077', '078', '079', '086', '089', '090',
+                '091', '092', '093', '094', '096', '097', '098', '056', '058'],
             SCAN_FILE: path.join(process.env.APPDATA || os.homedir(), 'Zalo Bulk Tool Pro', '.phone_scan.json'),
             data: { scanned: [], found: 0, sessions: 0 },
             load() {
                 try {
                     if (fs.existsSync(this.SCAN_FILE))
                         this.data = JSON.parse(fs.readFileSync(this.SCAN_FILE, 'utf8'));
-                } catch(_){}
+                } catch (_) { }
             },
             save() {
                 try {
                     const dir = path.dirname(this.SCAN_FILE);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                     fs.writeFileSync(this.SCAN_FILE, JSON.stringify(this.data));
-                } catch(_){}
+                } catch (_) { }
             },
             generatePhone() {
                 const prefix = this.PREFIXES[Math.floor(Math.random() * this.PREFIXES.length)];
@@ -6811,10 +6853,10 @@ async function sendBulkSmart(cookie, params, prog) {
                                 newTargets.push({ uid, name: user.display || user.zaloName || phone, phone });
                                 this.data.found++;
                                 log(`[PHONE-SCAN] Found: ${user.display || phone} (${uid})`);
-                                prog({ phase: 'cooldown', status: `ðŸ“± TÃ¬m Ä‘Æ°á»£c ${newTargets.length}/${maxScans} users má»›i...`, pct: 10 + Math.round(newTargets.length/maxScans*30) });
+                                prog({ phase: 'cooldown', status: `ðŸ“± TÃ¬m Ä‘Æ°á»£c ${newTargets.length}/${maxScans} users má»›i...`, pct: 10 + Math.round(newTargets.length / maxScans * 30) });
                             }
                         }
-                    } catch(_){}
+                    } catch (_) { }
 
                     // Delay trÃ¡nh flood â€” 300-600ms má»—i lookup
                     await sleep(300 + Math.random() * 300);
@@ -6858,8 +6900,8 @@ async function sendBulkSmart(cookie, params, prog) {
             async waitWithBackoff(key, reason, baseMs = 5000, maxMs = 300000) {
                 const delay = this.getDecorrelatedDelay(key, baseMs, maxMs);
                 const n = this.attempts[key] || 0;
-                log(`[BACKOFF] ${reason} â†’ attempt #${n+1}, wait ${Math.round(delay/1000)}s (decorrelated jitter)`);
-                prog({ phase: 'cooldown', status: `â³ Backoff #${n+1}: chá» ${Math.round(delay/1000)}s (${reason})...`, pct: 70 });
+                log(`[BACKOFF] ${reason} â†’ attempt #${n + 1}, wait ${Math.round(delay / 1000)}s (decorrelated jitter)`);
+                prog({ phase: 'cooldown', status: `â³ Backoff #${n + 1}: chá» ${Math.round(delay / 1000)}s (${reason})...`, pct: 70 });
                 await sleep(delay);
                 return delay;
             }
@@ -6886,7 +6928,7 @@ async function sendBulkSmart(cookie, params, prog) {
             // Human variance ID â€” logged so you can spot sessions
             const sessionId = Math.random().toString(36).slice(2, 8).toUpperCase();
 
-            log(`[FINGERPRINT] Session ${sessionId}: noiseÃ—${noiseMult.toFixed(2)}, typing=${Math.round(typingProb*100)}%, wave=${waveSize}, noiseFreq=${Math.round(noiseFreq*100)}%, tokensâ‚€=${initTokens}, rotate@${rotateEvery}`);
+            log(`[FINGERPRINT] Session ${sessionId}: noiseÃ—${noiseMult.toFixed(2)}, typing=${Math.round(typingProb * 100)}%, wave=${waveSize}, noiseFreq=${Math.round(noiseFreq * 100)}%, tokensâ‚€=${initTokens}, rotate@${rotateEvery}`);
 
             return { sessionId, noiseMult, typingProb, waveSize, noiseFreq, initTokens, rotateEvery };
         })();
@@ -6919,14 +6961,14 @@ async function sendBulkSmart(cookie, params, prog) {
                 // vÃ¬ group cÅ© cÃ³ thá»ƒ Ä‘Ã£ bá»‹ block
                 inviteAccountRotations++;
                 // IMEI rotation on account switch
-                try { rotateUserAgent(); } catch(_){}
+                try { rotateUserAgent(); } catch (_) { }
                 log(`[POOL-INVITE] Rotated: ${prevAccount?.name || '?'} â†’ ${newAccount?.name || '?'} (reason: ${reason}, rotation #${inviteAccountRotations})`);
                 prog({ phase: 'cooldown', status: `Chuyá»ƒn TK invite: ${newAccount?.name || 'TK má»›i'} (${reason})`, pct: 75 });
                 await sleep(2000 + Math.random() * 2000); // settle time
                 // Warmup new account: browse group
                 const gid = inviteGroupIds[inviteGroupIdx] || null;
                 if (gid) {
-                    try { await api.getGroupInfo(gid); } catch(_){}
+                    try { await api.getGroupInfo(gid); } catch (_) { }
                     await sleep(1000 + Math.random() * 1000);
                 }
                 await refreshGroupLink();
@@ -6963,7 +7005,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         const gInfo = await api.getGroupInfo(invGid0);
                         if (gInfo && gInfo.members) groupMemberUids = new Set(gInfo.members.map(m => String(m.uid || m.userId || '')));
                     }
-                } catch(_){}
+                } catch (_) { }
                 const maxScan = params.phoneScanCount || 20;
                 const scanned = await phoneScanner.scan(api, maxScan, existingUids, groupMemberUids);
                 if (scanned.length > 0) {
@@ -6973,7 +7015,7 @@ async function sendBulkSmart(cookie, params, prog) {
             }
             // Group info warmup
             if (invGid0) {
-                try { await api.getGroupInfo(invGid0); } catch(_){}
+                try { await api.getGroupInfo(invGid0); } catch (_) { }
                 await sleep(1000 + Math.random() * 1000);
             }
 
@@ -6989,11 +7031,11 @@ async function sendBulkSmart(cookie, params, prog) {
                     inviteHistory = new Set(JSON.parse(fs.readFileSync(INVITE_HIST_FILE, 'utf8')));
                 }
                 log(`[HISTORY] Loaded ${inviteHistory.size} previously invited UIDs`);
-            } catch(_){}
+            } catch (_) { }
 
             function saveInviteHistory(uid) {
                 inviteHistory.add(uid);
-                try { fs.writeFileSync(INVITE_HIST_FILE, JSON.stringify([...inviteHistory])); } catch(_){}
+                try { fs.writeFileSync(INVITE_HIST_FILE, JSON.stringify([...inviteHistory])); } catch (_) { }
             }
 
             // â”€â”€ V5-4: SOCIAL PROXIMITY SCORING â€” sort queue by mutual friends â”€â”€
@@ -7008,7 +7050,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     inviteQueue.sort((a, b) => uidOrder.indexOf(a.uid) - uidOrder.indexOf(b.uid));
                     const topMutual = scored.filter(s => s.mutualCount > 0).length;
                     log(`[SOCIAL] ${topMutual}/${scored.length} targets have mutual friends â†’ prioritized`);
-                } catch(e) {
+                } catch (e) {
                     log(`[SOCIAL] Scoring failed (non-fatal): ${e.message}`);
                 }
             }
@@ -7067,7 +7109,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     const resumeAt = new Date(now); resumeAt.setHours(resumeH, 0, 0, 0);
                     if (resumeAt <= now) resumeAt.setDate(resumeAt.getDate() + 1);
                     const waitMs = resumeAt - now;
-                    log(`[CIRCADIAN] ðŸŒ™ Off-hours â†’ pause until ${resumeH}:00 (${Math.round(waitMs/60000)}min)`);
+                    log(`[CIRCADIAN] ðŸŒ™ Off-hours â†’ pause until ${resumeH}:00 (${Math.round(waitMs / 60000)}min)`);
                     prog({ phase: 'cooldown', status: `ðŸŒ™ NgoÃ i giá» â€” táº¡m dá»«ng Ä‘áº¿n ${resumeH}:00...`, pct: 70 });
                     await sleep(waitMs);
                     if (_cancelBulk) break;
@@ -7093,8 +7135,8 @@ async function sendBulkSmart(cookie, params, prog) {
                 // â”€â”€ V5-3: TOKEN BUCKET CHECK â”€â”€
                 if (!tokenBucket.consume(acctId)) {
                     const waitMs = tokenBucket.getWaitTime(acctId);
-                    log(`[BUCKET] Rate limited â€” wait ${Math.round(waitMs/1000)}s for token refill`);
-                    prog({ phase: 'cooldown', status: `â³ Rate limit â€” chá» ${Math.round(waitMs/1000)}s...`, pct: 70 });
+                    log(`[BUCKET] Rate limited â€” wait ${Math.round(waitMs / 1000)}s for token refill`);
+                    prog({ phase: 'cooldown', status: `â³ Rate limit â€” chá» ${Math.round(waitMs / 1000)}s...`, pct: 70 });
                     await sleep(waitMs);
                     if (_cancelBulk) break;
                 }
@@ -7111,7 +7153,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 // BUG FIX: speedMult=0 at night â†’ min 5s to avoid instant spam
                 const effectiveMult = Math.max(0.1, speedMult);
                 const trickleDelay = Math.max(5000, (trickleBase + Math.random() * trickleBase) * 1000 * effectiveMult);
-                log(`[QUEUE] Wait ${Math.round(trickleDelay/1000)}s (${circadianEngine.getPhaseLabel()} Ã—${effectiveMult.toFixed(1)}) â†’ #${usedInvite+1} ${qi.name}`);
+                log(`[QUEUE] Wait ${Math.round(trickleDelay / 1000)}s (${circadianEngine.getPhaseLabel()} Ã—${effectiveMult.toFixed(1)}) â†’ #${usedInvite + 1} ${qi.name}`);
                 await sleep(trickleDelay);
                 if (_cancelBulk) break;
 
@@ -7123,7 +7165,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         if (!invGid) break;
                     } else {
                         const cooldown = 180000 + Math.random() * 120000;
-                        prog({ phase: 'cooldown', status: `Nghá»‰ ${Math.round(cooldown/60000)} phÃºt (háº¿t TK)...`, pct: 70 });
+                        prog({ phase: 'cooldown', status: `Nghá»‰ ${Math.round(cooldown / 60000)} phÃºt (háº¿t TK)...`, pct: 70 });
                         await sleep(cooldown);
                         if (_cancelBulk) break;
                         inviteAccountCount = 0;
@@ -7133,7 +7175,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 // Micro-pause (single account)
                 if (!usePool && usedInvite > 0 && usedInvite % 5 === 0) {
                     const cooldown = 180000 + Math.random() * 120000;
-                    prog({ phase: 'cooldown', status: `Nghá»‰ ${Math.round(cooldown/60000)} phÃºt sau ${usedInvite} lá»i má»i...`, pct: 70 });
+                    prog({ phase: 'cooldown', status: `Nghá»‰ ${Math.round(cooldown / 60000)} phÃºt sau ${usedInvite} lá»i má»i...`, pct: 70 });
                     await sleep(cooldown);
                     if (_cancelBulk) break;
                     await doNoiseCall();
@@ -7149,7 +7191,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 if (Math.random() < sessionFingerprint.noiseFreq) await doNoiseCall();
                 // V6-3 Fingerprint: use per-session typing probability
                 if (Math.random() < sessionFingerprint.typingProb) {
-                    try { await api.sendTypingEvent(qi.uid, ThreadType.User); } catch(_){}
+                    try { await api.sendTypingEvent(qi.uid, ThreadType.User); } catch (_) { }
                     await sleep(500 + Math.random() * 500);
                 }
 
@@ -7164,11 +7206,11 @@ async function sendBulkSmart(cookie, params, prog) {
                         await api.sendFriendRequest('', qi.uid);
                         log(`[FR-RACE] ${qi.name} â†’ pending_friend`);
                         await sleep(500 + Math.random() * 800);
-                    } catch(_){}
+                    } catch (_) { }
                 }
 
                 // Relationship Warming
-                try { await api.getUserInfo(qi.uid); await sleep(600 + Math.random() * 800); } catch(_){}
+                try { await api.getUserInfo(qi.uid); await sleep(600 + Math.random() * 800); } catch (_) { }
 
                 // â”€â”€ V5-2: ADAPTIVE ENDPOINT â€” reorder by learned success rate â”€â”€
                 const bestOrder = endpointLearner.getBestOrder(userType);
@@ -7218,7 +7260,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     if (ch2.status === 'rejected') endpointLearner.record(secondary, userType, false);
 
                     log(`[DUAL-V5] ${primary}:${ch1.status === 'fulfilled' ? 'OK' : ch1.reason?.message || 'fail'} | ${secondary}:${ch2.status === 'fulfilled' ? 'OK' : ch2.reason?.message || 'fail'}`);
-                } catch(e) {
+                } catch (e) {
                     log(`[DUAL-V5] Error: ${e.message}`);
                 }
 
@@ -7228,7 +7270,7 @@ async function sendBulkSmart(cookie, params, prog) {
                         usedEndpoint = await channels[fallback]();
                         invOk = true;
                         endpointLearner.record(fallback, userType, true);
-                    } catch(e) {
+                    } catch (e) {
                         endpointLearner.record(fallback, userType, false);
                         log(`[INVITE] Fallback ${fallback} fail: ${e.message}`);
                     }
@@ -7245,7 +7287,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     accountWarmer.recordInvite(acctId);
                     tokenBucket.reward(acctId);
                     if (usePool) { const cur = accountPool.getCurrent(); if (cur) accountPool.incrementQuota(cur.uid); }
-                    log(`[INVITE] #${usedInvite} ${qi.name} via ${usedEndpoint} | TK:${inviteAccountCount}/${INVITE_ROTATE_EVERY} | Rate:${Math.round(queueInviteOk/(queueInviteOk+queueInviteFail)*100)}% | Learn:${endpointLearner.getSummary()}`);
+                    log(`[INVITE] #${usedInvite} ${qi.name} via ${usedEndpoint} | TK:${inviteAccountCount}/${INVITE_ROTATE_EVERY} | Rate:${Math.round(queueInviteOk / (queueInviteOk + queueInviteFail) * 100)}% | Learn:${endpointLearner.getSummary()}`);
                     prog({ phase: 'sending', ok: true, name: qi.name, via: usedEndpoint || 'invite', pct: 90, results });
                 } else {
                     consecutiveInviteFails++;
@@ -7328,7 +7370,7 @@ async function sendBulkSmart(cookie, params, prog) {
         }
 
         // V10-5: Start WebSocket Mimicry (background heartbeat + presence)
-        try { wsMimicry.start(api); } catch(_) {}
+        try { wsMimicry.start(api); } catch (_) { }
 
         // V10-6: EMA Forecaster â€” check if now is a good time
         const emaAdvice = emaForecaster.shouldSendNow();
@@ -7445,8 +7487,8 @@ async function sendBulkSmart(cookie, params, prog) {
             if (targets.length > 30 && waveCount >= WAVE_SIZE) {
                 // U7: adjust wave size based on success rate
                 const waveSuccessRate = results.sent > 0 ? results.msgOk / results.sent : 1;
-                if (waveSuccessRate > 0.8 && WAVE_SIZE < 35) { WAVE_SIZE += 5; log(`[U7] Waveâ†‘ ${WAVE_SIZE} (rate:${Math.round(waveSuccessRate*100)}%)`); }
-                else if (waveSuccessRate < 0.5 && WAVE_SIZE > 8) { WAVE_SIZE -= 5; log(`[U7] Waveâ†“ ${WAVE_SIZE} (rate:${Math.round(waveSuccessRate*100)}%)`); }
+                if (waveSuccessRate > 0.8 && WAVE_SIZE < 35) { WAVE_SIZE += 5; log(`[U7] Waveâ†‘ ${WAVE_SIZE} (rate:${Math.round(waveSuccessRate * 100)}%)`); }
+                else if (waveSuccessRate < 0.5 && WAVE_SIZE > 8) { WAVE_SIZE -= 5; log(`[U7] Waveâ†“ ${WAVE_SIZE} (rate:${Math.round(waveSuccessRate * 100)}%)`); }
                 waveCount = 0;
 
                 // TRY POOL ROTATION instead of idle wave break
@@ -7462,7 +7504,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     await sleep(3000 + Math.random() * 2000); // short pause between accounts
                 } else {
                     const breakS = 120 + Math.random() * 360;
-                    prog({ phase: 'cooldown', status: `Nghi ${(breakS/60).toFixed(1)}ph (wave:${WAVE_SIZE}, het TK)`, pct: Math.round((i / targets.length) * 100) });
+                    prog({ phase: 'cooldown', status: `Nghi ${(breakS / 60).toFixed(1)}ph (wave:${WAVE_SIZE}, het TK)`, pct: Math.round((i / targets.length) * 100) });
                     await doNoiseCall();
                     await sleep(breakS * 1000);
                     await doNoiseCall();
@@ -7535,7 +7577,7 @@ async function sendBulkSmart(cookie, params, prog) {
                     if (!isFriend && Math.random() < 0.6) await browseProfile(t.uid);
 
                     // Typing simulation (human behavior)
-                    try { await api.sendTypingEvent(t.uid, ThreadType.User); } catch (_) {}
+                    try { await api.sendTypingEvent(t.uid, ThreadType.User); } catch (_) { }
                     // Adaptive typing delay: longer for first few, shorter later
                     const typingDelay = i < 3 ? (1500 + Math.random() * 2000) : (600 + Math.random() * 1000);
                     await sleep(typingDelay);
@@ -7768,7 +7810,7 @@ async function sendBulkSmart(cookie, params, prog) {
                 const rt = retryQueue[ri];
                 try {
                     await browseProfile(rt.uid);
-                    try { await api.sendTypingEvent(rt.uid, ThreadType.User); } catch(_){}
+                    try { await api.sendTypingEvent(rt.uid, ThreadType.User); } catch (_) { }
                     await sleep(1000 + Math.random() * 2000);
                     if (groupLink) {
                         await api.sendLink({ link: groupLink, msg: rt.msg }, rt.uid, ThreadType.User);
@@ -7777,8 +7819,8 @@ async function sendBulkSmart(cookie, params, prog) {
                     }
                     results.msgOk++; results.sent++;
                     log(`[RETRY] OK â†’ ${rt.name}`);
-                    prog({ phase: 'sending', ok: true, name: rt.name, via: 'retry', pct: 85 + Math.round((ri/retryQueue.length)*10), results });
-                } catch(e) {
+                    prog({ phase: 'sending', ok: true, name: rt.name, via: 'retry', pct: 85 + Math.round((ri / retryQueue.length) * 10), results });
+                } catch (e) {
                     log(`[RETRY] FAIL â†’ ${rt.name}: ${e.message}`);
                     prog({ phase: 'sending', ok: false, name: rt.name, via: 'retry_fail', error: e.message, pct: 85, results });
                 }
@@ -7810,7 +7852,7 @@ async function sendBulkSmart(cookie, params, prog) {
         sessionManager.complete(sessionId, report);
 
         // â•â•â• V9-V12 CLEANUP â•â•â•
-        try { wsMimicry.stop(); } catch(_) {}    // Stop WebSocket heartbeat
+        try { wsMimicry.stop(); } catch (_) { }    // Stop WebSocket heartbeat
         rlRateLimiter.persist();                    // Save Q-table
         emaForecaster.persist();                    // Save hourly EMA data
         reputationSystem.persist();                 // Save account scores
@@ -7832,97 +7874,146 @@ async function sendBulkSmart(cookie, params, prog) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // AUTO-JOIN GROUPS â€” Tá»± Ä‘á»™ng join nhÃ³m tá»« link
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-async function autoJoinGroups({ cookies, groupLinks, onProgress }) {
-    const results = {
-        joined: [],   // { link, groupId, groupName, account }
-        failed: [],   // { link, reason }
-        alreadyIn: [] // { link, groupId }
-    };
 
+// ══════════════════════════════════════════════════════════════════
+// SCAN GROUP LINKS — Quét thông tin nhóm (Trạng thái Mở/Khóa Chat)
+// ══════════════════════════════════════════════════════════════════
+async function scanGroupLinks({ cookies, groupLinks, onProgress }) {
+    const results = { scanned: [], failed: [] };
+    const log = (...a) => console.log('[ScanLink]', ...a);
     const prog = onProgress || (() => {});
-
-    // Support multiple accounts (cookie array)
     const cookieList = Array.isArray(cookies) ? cookies : [cookies];
-    // Round-robin accounts across group links to distribute load
     let acctIdx = 0;
 
     for (let i = 0; i < groupLinks.length; i++) {
         const link = (groupLinks[i] || '').trim();
         if (!link) continue;
-
         const cookie = cookieList[acctIdx % cookieList.length];
         acctIdx++;
 
-        prog({
-            phase: 'joining',
-            status: `ðŸ”— Join group ${i+1}/${groupLinks.length}: ${link.slice(-12)}...`,
-            pct: Math.round(i / groupLinks.length * 100),
-            results
-        });
+        prog({ phase: 'scanning', status: `🔍 Đang quét ${i + 1}/${groupLinks.length}...`, pct: Math.round(i / groupLinks.length * 100), results });
 
-        let joined = false;
-        // Try up to 2 times with backoff
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const api = await getApi(cookie);
+            const codeMatch = link.match(/zalo\.me\/g\/([a-zA-Z0-9]+)/);
+            const code = codeMatch ? codeMatch[1] : link;
+            const fullLink = link.startsWith('http') ? link : `https://zalo.me/g/${code}`;
+
+            let info = null;
             try {
-                const api = await getApi(cookie);
-                const { ThreadType } = await import('zca-js');
-
-                // Extract group code from link
-                const codeMatch = link.match(/zalo\.me\/g\/([a-zA-Z0-9]+)/);
-                const code = codeMatch ? codeMatch[1] : link;
-
-                // Try joinGroupByLink â€” main method
-                let joinResult = null;
-                try { joinResult = await api.joinGroupByLink?.(code); } catch(_){}
-                if (!joinResult) try { joinResult = await api.joinGroup?.(code); } catch(_){}
-                if (!joinResult) try { joinResult = await api.joinGroupViaLink?.(link); } catch(_){}
-
-                // Check result
-                if (joinResult) {
-                    const errCode = joinResult.error_code ?? joinResult.errorCode ?? joinResult.code;
-                    const groupId = String(joinResult.groupId || joinResult.grid || joinResult.id || code);
-                    const groupName = joinResult.groupName || joinResult.name || groupId;
-
-                    if (errCode === 0 || errCode === undefined) {
-                        results.joined.push({ link, groupId, groupName, account: cookie.slice(0, 10) + '...' });
-                        log(`[JOIN] âœ… Joined: ${groupName} (${groupId})`);
-                        joined = true;
-                        break;
-                    } else if (errCode === -216 || errCode === 216) {
-                        // Already a member
-                        results.alreadyIn.push({ link, groupId, groupName });
-                        log(`[JOIN] â„¹ï¸ Already in: ${groupName}`);
-                        joined = true;
-                        break;
-                    } else {
-                        throw new Error(`error_code:${errCode}`);
+                info = await api.getGroupLinkInfo({ link: fullLink });
+            } catch (err) {
+                const isRateLimit = (err.message || '').includes('request cho ph');
+                if (isRateLimit) {
+                    log(`[RATE LIMIT] Zalo chặn tốc độ, đợi 15s rồi thử lại...`);
+                    await sleep(15000);
+                    try { info = await api.getGroupLinkInfo({ link: fullLink }); } catch (err2) {
+                        results.failed.push({ link, reason: 'Rate limit' });
+                        continue;
                     }
                 } else {
-                    throw new Error('no response');
+                    log(`[CRITICAL] getGroupLinkInfo throw error:`, err.message);
+                    results.failed.push({ link, reason: err.message });
+                    continue;
                 }
-            } catch(e) {
-                log(`[JOIN] âŒ Attempt ${attempt} fail: ${link.slice(-12)} â€” ${e.message}`);
-                if (attempt < 2) await sleep(3000 + Math.random() * 3000);
             }
-        }
-        if (!joined) {
-            results.failed.push({ link, reason: 'all attempts failed' });
-        }
 
-        // Rate limit: 1-2s between joins
-        await sleep(1000 + Math.random() * 1500);
+            if (info && (info.name || info.groupName)) {
+                const groupName = info.name || info.groupName;
+                const setting = info.setting || {};
+                const isLocked = setting.lockSendMsg === 1 || setting.isBannedSms === true;
+                const totalMember = info.totalMember || 0;
+                results.scanned.push({ link, code, groupName, totalMember, isOpenChat: !isLocked });
+                log(`[SCAN OK] ${groupName} - Mở chat: ${!isLocked}`);
+            } else {
+                results.failed.push({ link, reason: 'Không đọc được tên nhóm' });
+            }
+        } catch (e) {
+            results.failed.push({ link, reason: e.message });
+        }
+        await sleep(3000 + Math.random() * 3000);
     }
-
-    log(`[JOIN] Done: ${results.joined.length} joined, ${results.alreadyIn.length} already in, ${results.failed.length} failed`);
-    prog({ phase: 'done', status: `âœ… ${results.joined.length} joined | âš ï¸ ${results.alreadyIn.length} Ä‘Ã£ cÃ³ | âŒ ${results.failed.length} lá»—i`, pct: 100, results });
+    prog({ phase: 'done', status: '✅ Hoàn tất lọc link!', pct: 100, results });
     return results;
 }
+
+// ══════════════════════════════════════════════════════════════════
+// AUTO-JOIN GROUPS (BẦY ĐÀN)
+// ══════════════════════════════════════════════════════════════════
+async function autoJoinGroups({ cookies, groupLinks, onProgress }) {
+    const results = { joined: [], failed: [], alreadyIn: [] };
+    const log = (...a) => console.log('[AutoJoin]', ...a);
+    const prog = onProgress || (() => {});
+    const cookieList = Array.isArray(cookies) ? cookies : [cookies];
+    let totalActions = groupLinks.length * cookieList.length;
+    let completedActions = 0;
+
+    for (let i = 0; i < groupLinks.length; i++) {
+        const link = (groupLinks[i] || '').trim();
+        if (!link) { completedActions += cookieList.length; continue; }
+
+        for (let j = 0; j < cookieList.length; j++) {
+            const cookie = cookieList[j];
+            completedActions++;
+            prog({
+                phase: 'joining',
+                status: `🔗 Bầy Đàn ${completedActions}/${totalActions}: Nhóm ${i+1}/${groupLinks.length} (Nick ${j+1})`,
+                pct: Math.round(completedActions / totalActions * 100), results
+            });
+
+            let joined = false;
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    const api = await getApi(cookie);
+                    const codeMatch = link.match(/zalo\.me\/g\/([a-zA-Z0-9]+)/);
+                    const code = codeMatch ? codeMatch[1] : link;
+
+                    let joinResult = null;
+                    try { joinResult = await api.joinGroupByLink?.(code); } catch(_) {}
+                    if (!joinResult) try { joinResult = await api.joinGroup?.(code); } catch(_) {}
+                    if (!joinResult) try { joinResult = await api.joinGroupViaLink?.(link); } catch(_) {}
+
+                    if (joinResult) {
+                        const errCode = joinResult.error_code ?? joinResult.errorCode ?? joinResult.code;
+                        const groupId = String(joinResult.groupId || joinResult.grid || joinResult.id || code);
+                        const groupName = joinResult.groupName || joinResult.name || groupId;
+
+                        if (errCode === 0 || errCode === undefined) {
+                            results.joined.push({ link, groupId, groupName, account: cookie.slice(0, 10) + '...' });
+                            log(`[JOIN] ✅ Nick ${j+1} Joined: ${groupName}`);
+                            joined = true; break;
+                        } else if (errCode === -216 || errCode === 216 || errCode === 14002) {
+                            results.alreadyIn.push({ link, groupId, groupName, account: cookie.slice(0, 10) + '...' });
+                            log(`[JOIN] ℹ️ Nick ${j+1} Already in: ${groupName}`);
+                            joined = true; break;
+                        } else if (errCode === 111) {
+                            log(`[JOIN] 🚫 Bị khóa Join (111) ở Nick ${j+1}. Bỏ qua nhóm cho Nick này.`);
+                            results.failed.push({ link, reason: 'Bị block 111' });
+                            break;
+                        } else { throw new Error(`code:${errCode}`); }
+                    } else { throw new Error('no response'); }
+                } catch(e) {
+                    log(`[JOIN] ❌ Nick ${j+1} fail: ${link.slice(-8)} — ${e.message}`);
+                    if (attempt < 2) await sleep(5000 + Math.random() * 5000);
+                }
+            }
+            if (!joined) { results.failed.push({ link, reason: 'Thất bại' }); }
+            await sleep(5000 + Math.random() * 5000);
+        }
+    }
+    log(`[JOIN] Done: ${results.joined.length} joined, ${results.alreadyIn.length} already in, ${results.failed.length} failed`);
+    prog({ phase: 'done', status: `✅ ${results.joined.length} joined | ⚠️ ${results.alreadyIn.length} đã có | ❌ ${results.failed.length} lỗi`, pct: 100, results });
+    return results;
+}
+
+
+
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CHECK GROUP CHAT STATUS â€” PhÃ¢n loáº¡i nhÃ³m: chat má»Ÿ vs chá»‰ admin
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function checkGroupChatStatus({ cookie, groupIds, onProgress }) {
-    const prog = onProgress || (() => {});
+    const prog = onProgress || (() => { });
     const api = await getApi(cookie);
     const statusList = [];
 
@@ -7937,10 +8028,10 @@ async function checkGroupChatStatus({ cookie, groupIds, onProgress }) {
                 const resolved = await api.getGroupIdByLink(rawGid);
                 if (resolved && (resolved.groupId || resolved.id)) gid = String(resolved.groupId || resolved.id);
             }
-        } catch(_) {}
+        } catch (_) { }
         prog({
             phase: 'checking',
-            status: `ðŸ” Kiá»ƒm tra nhÃ³m ${i+1}/${groupIds.length}: ${gid}`,
+            status: `ðŸ” Kiá»ƒm tra nhÃ³m ${i + 1}/${groupIds.length}: ${gid}`,
             pct: Math.round(i / groupIds.length * 100)
         });
 
@@ -7984,7 +8075,7 @@ async function checkGroupChatStatus({ cookie, groupIds, onProgress }) {
 
                 log(`[CHAT-STATUS] ${groupName}: ${isOpenChat ? 'âœ… Má»ž CHAT' : 'ðŸ”’ CHá»ˆ ADMIN'} | ${memberCount} members`);
             }
-        } catch(e) {
+        } catch (e) {
             statusList.push({ groupId: gid, groupName, isOpenChat: false, error: e.message, scanPriority: 'SKIP' });
             log(`[CHAT-STATUS] ${gid}: Error â€” ${e.message}`);
         }
@@ -8010,7 +8101,7 @@ async function checkGroupChatStatus({ cookie, groupIds, onProgress }) {
 // DÃ¹ng global dedup file Ä‘á»ƒ trÃ¡nh harvest láº¡i UID Ä‘Ã£ xá»­ lÃ½.
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function harvestRecentChatters({ cookie, groupLinks, maxPerGroup = 200, existingDedup = null, onProgress }) {
-    const prog = onProgress || (() => {});
+    const prog = onProgress || (() => { });
     const api = await getApi(cookie);
     const { ThreadType } = await import('zca-js');
 
@@ -8018,7 +8109,7 @@ async function harvestRecentChatters({ cookie, groupLinks, maxPerGroup = 200, ex
     const fs2 = require('fs');
     let globalDedup = existingDedup || new Set();
     if (globalDedup.size === 0) {
-        try { if (fs2.existsSync(DEDUP_FILE)) globalDedup = new Set(JSON.parse(fs2.readFileSync(DEDUP_FILE, 'utf8'))); } catch(_) {}
+        try { if (fs2.existsSync(DEDUP_FILE)) globalDedup = new Set(JSON.parse(fs2.readFileSync(DEDUP_FILE, 'utf8'))); } catch (_) { }
     }
 
     const harvestedTargets = [];
@@ -8051,9 +8142,9 @@ async function harvestRecentChatters({ cookie, groupLinks, maxPerGroup = 200, ex
                 if (!newId || newId === lastMsgId) break;
                 lastMsgId = newId;
                 await sleep(250 + Math.random() * 200);
-            } catch(e) { break; }
+            } catch (e) { break; }
         }
-        const batch = [...senderMap.values()].sort((a,b) => (b.lastSeen||0) - (a.lastSeen||0)).slice(0, maxPerGroup);
+        const batch = [...senderMap.values()].sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)).slice(0, maxPerGroup);
         for (const t of batch) { globalDedup.add(t.uid); harvestedTargets.push(t); }
         log(`[HARVEST] +${batch.length} chatters from ${link.slice(-10)} (total: ${harvestedTargets.length})`);
     }
@@ -8063,7 +8154,7 @@ async function harvestRecentChatters({ cookie, groupLinks, maxPerGroup = 200, ex
         const d = require('path').dirname(DEDUP_FILE);
         if (!fs2.existsSync(d)) fs2.mkdirSync(d, { recursive: true });
         fs2.writeFileSync(DEDUP_FILE, JSON.stringify([...globalDedup]));
-    } catch(_) {}
+    } catch (_) { }
 
     return { targets: harvestedTargets, dedup: globalDedup };
 }
@@ -8089,11 +8180,11 @@ async function harvestRecentChatters({ cookie, groupLinks, maxPerGroup = 200, ex
 //    5. SEND        â€” DM + Invite vá»›i toÃ n bá»™ V5/V6 engines
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function runFullPipeline({ cookies, groupLinks, destGroupIds, messages, opts = {}, onProgress }) {
-    const prog = onProgress || (() => {});
+    const prog = onProgress || (() => { });
     const cookieList = Array.isArray(cookies) ? cookies : [cookies];
     const primaryCookie = cookieList[0];
     const maxPerGroup = opts.maxPerGroup || 200;
-    const chatScoreN  = opts.chatScoreN  || 50;
+    const chatScoreN = opts.chatScoreN || 50;
 
     const pipelineResult = {
         stage: 'starting',
@@ -8169,7 +8260,7 @@ async function runFullPipeline({ cookies, groupLinks, destGroupIds, messages, op
                 return matchedJoin?.link || `https://zalo.me/g/${g.groupId}`;
             }),
             maxPerGroup,
-            onProgress: (p) => prog({ stage: 'harvesting', status: `ðŸ“¡ [3/5] QuÃ©t ${(p.index||0)+1}/${p.total}: ...`, pct: 30 + Math.round((p.pct||0)*0.2), pipeline: pipelineResult })
+            onProgress: (p) => prog({ stage: 'harvesting', status: `ðŸ“¡ [3/5] QuÃ©t ${(p.index || 0) + 1}/${p.total}: ...`, pct: 30 + Math.round((p.pct || 0) * 0.2), pipeline: pipelineResult })
         });
 
         const harvestedTargets = harvestResult.targets;
@@ -8200,7 +8291,7 @@ async function runFullPipeline({ cookies, groupLinks, destGroupIds, messages, op
             chatScoreCheck: chatScoreN,
             phoneScan: opts.phoneScan || false,
         }, (p) => {
-            prog({ stage: 'sending', status: `ðŸš€ [4-5/5] ${p.status}`, pct: 55 + Math.round((p.pct||0)*0.45), pipeline: pipelineResult });
+            prog({ stage: 'sending', status: `ðŸš€ [4-5/5] ${p.status}`, pct: 55 + Math.round((p.pct || 0) * 0.45), pipeline: pipelineResult });
         });
 
         pipelineResult.sendResult = sendResult;
@@ -8208,12 +8299,12 @@ async function runFullPipeline({ cookies, groupLinks, destGroupIds, messages, op
         log(`[PIPELINE] âœ… All stages complete!`);
         prog({
             stage: 'done',
-            status: `âœ… Pipeline xong: ${joinResult.joined.length} nhÃ³m joined, ${openGroups.length} má»Ÿ chat, ${harvestedTargets.length} harvested, ${sendResult?.inviteOk||0} invited`,
+            status: `âœ… Pipeline xong: ${joinResult.joined.length} nhÃ³m joined, ${openGroups.length} má»Ÿ chat, ${harvestedTargets.length} harvested, ${sendResult?.inviteOk || 0} invited`,
             pct: 100,
             pipeline: pipelineResult
         });
 
-    } catch(e) {
+    } catch (e) {
         pipelineResult.errors.push(e.message);
         pipelineResult.stage = 'error';
         log(`[PIPELINE] âŒ Fatal: ${e.message}`);
@@ -8245,7 +8336,7 @@ async function sendGroupMessage(cookie, groupId, message) {
 
 // Gá»­i tin vÃ o nhiá»u nhÃ³m cÃ¹ng lÃºc (láº§n lÆ°á»£t, cÃ³ delay)
 async function sendGroupMessageBulk({ cookie, groupIds, message, delay = 3000, onProgress }) {
-    const prog = onProgress || (() => {});
+    const prog = onProgress || (() => { });
     const results = { ok: 0, fail: 0, errors: [] };
     for (let i = 0; i < groupIds.length; i++) {
         const gid = groupIds[i];
@@ -8254,7 +8345,7 @@ async function sendGroupMessageBulk({ cookie, groupIds, message, delay = 3000, o
             const r = await sendGroupMessage(cookie, gid, message);
             if (r.success) { results.ok++; }
             else { results.fail++; results.errors.push({ gid, error: r.error }); }
-        } catch(e) {
+        } catch (e) {
             results.fail++;
             results.errors.push({ gid, error: e.message });
         }
@@ -8272,6 +8363,8 @@ module.exports = {
     findUserByPhone,
     sendMessage,
     sendMessageByUid,
+    massSendGroupMsgs,
+    leaveGroup,
     sendFriendRequest,
     sendFriendRequestByUid,
     getGroups,
@@ -8288,6 +8381,7 @@ module.exports = {
     cancelBulkSend,
     accountPool,
     autoJoinGroups,
+    scanGroupLinks,
     checkGroupChatStatus,
     runFullPipeline,
     harvestRecentChatters,

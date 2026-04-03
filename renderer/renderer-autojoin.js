@@ -34,6 +34,7 @@
         div.style.color = colors[type] || colors.info;
         div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
         logEl.appendChild(div);
+        if (logEl.childElementCount > 300) logEl.removeChild(logEl.firstChild);
         logEl.scrollTop = logEl.scrollHeight;
     }
 
@@ -74,7 +75,7 @@
         btnStart.addEventListener('click', async function () {
             if (_running) return;
 
-            const loggedIn = await checkLogin();
+            const loggedIn = await window.checkLoginGlobal();
             if (!loggedIn) {
                 if (typeof toast === 'function') toast('Cần đăng nhập!', 'error');
                 return;
@@ -154,6 +155,124 @@
             _running = false;
             btnStart.style.display = '';
             btnStart.textContent = '▶ Chạy lại';
+            if ($('btnAJStop')) $('btnAJStop').style.display = 'none';
+        });
+    }
+
+    // ── Nút Lưu Nhóm Mở Chat ──
+    window._lastScannedOpenChats = [];
+    const btnSaveOpen = $('btnAJSaveOpen');
+    if (btnSaveOpen) {
+        btnSaveOpen.addEventListener('click', () => {
+            if (!window._lastScannedOpenChats || window._lastScannedOpenChats.length === 0) {
+                if (typeof toast === 'function') toast('Không có nhóm mở chat nào để lưu!', 'warning');
+                return;
+            }
+            const txt = window._lastScannedOpenChats.join('\n');
+            const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ZaloTool_NhomMoChat_${new Date().getTime()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            if (typeof toast === 'function') toast(`Đã lưu ${window._lastScannedOpenChats.length} link vào mục Downloads!`, 'success');
+        });
+    }
+
+    // ── Nút Quét Link (Scan) ──
+    const btnScan = $('btnAJScan');
+    if (btnScan) {
+        btnScan.addEventListener('click', async function () {
+            if (_running) return;
+
+            window.S = window.S || {};
+            const loggedIn = await window.checkLoginGlobal();
+            if (!loggedIn) {
+                if (typeof toast === 'function') toast('Cần đăng nhập!', 'error');
+                return;
+            }
+
+            const linksEl = $('ajGroupLinks');
+            const links = linksEl ? linksEl.value.trim().split('\n').map(l => l.trim()).filter(Boolean) : [];
+            if (!links.length) {
+                if (typeof toast === 'function') toast('Nhập link nhóm!', 'warning');
+                return;
+            }
+
+            let cookies = [];
+            try {
+                const pool = await ez.poolGetAll();
+                if (pool && pool.length) {
+                    cookies = pool.map(a => a.cookie).filter(Boolean);
+                }
+            } catch (e) { }
+            if (!cookies.length && _cookie) cookies.push(_cookie);
+            if (!cookies.length) cookies.push('QR_SESSION');
+
+            _running = true;
+            btnScan.style.opacity = '0.5';
+            btnStart.style.display = 'none';
+            const btnStopEl = $('btnAJStop');
+            if (btnStopEl) btnStopEl.style.display = '';
+
+            ajLog('Bắt đầu Quét/Lọc: ' + links.length + ' nhóm, ' + cookies.length + ' TK', 'head');
+            ajProgress(0);
+
+            if (el.onAutoJoinProgress && !_ajListenerRegistered) {
+                _ajListenerRegistered = true;
+                el.onAutoJoinProgress(function (p) {
+                    if (p.pct) ajProgress(p.pct);
+                    if (p.status) ajLog(p.status, 'info');
+                });
+            }
+
+            try {
+                const result = await ez.scanGroupLinks(cookies, links);
+
+                if (result && result.scanned) {
+                    ajLog('Hoàn tất quét! Thành công: ' + result.scanned.length + ' | Lỗi: ' + (result.failed ? result.failed.length : 0), 'ok');
+
+                    // Lọc ra các nhóm Mở Chat
+                    const openChats = result.scanned.filter(g => g.isOpenChat).map(g => g.link);
+                    window._lastScannedOpenChats = openChats;
+                    const btnSaveOpenEl = $('btnAJSaveOpen');
+                    if (btnSaveOpenEl) btnSaveOpenEl.style.display = openChats.length > 0 ? '' : 'none';
+
+                    if (openChats.length > 0) {
+                        linksEl.value = openChats.join('\n');
+                        ajLog(`🎉 Đã tự động chọn ${openChats.length} link Mở Chat, loại bỏ link khóa chat. Anh có thể bấm Tham Gia ngay!`, 'head');
+                        if (typeof toast === 'function') toast(`Lọc được ${openChats.length} nhóm mở chat!`, 'success');
+                    } else {
+                        ajLog(`Tất cả link đều bị Khóa Chat hoặc Lỗi. Không tìm thấy mỏ vàng.`, 'warn');
+                        if (typeof toast === 'function') toast('Không có nhóm mở chat!', 'warning');
+                    }
+
+                    const listEl = $('ajResultList');
+                    if (listEl) {
+                        listEl.innerHTML = result.scanned.map(function (d) {
+                            const icon = d.isOpenChat ? '✅' : '🔒';
+                            const color = d.isOpenChat ? '#10b981' : '#ef4444';
+                            return '<div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px">'
+                                + '<span style="color:' + color + '">' + icon + ' ' + (d.groupName || d.link || '—') + '</span>'
+                                + '<span style="color:#888;font-size:10px">' + (d.totalMember || 0) + ' mems</span>'
+                                + '</div>';
+                        }).join('');
+                    }
+
+                } else {
+                    ajLog('Lỗi server: ' + JSON.stringify(result).substring(0, 200), 'err');
+                }
+            } catch (e) {
+                ajLog('Lỗi: ' + e.message, 'err');
+            }
+
+            ajProgress(100);
+            _running = false;
+            btnScan.style.opacity = '1';
+            btnStart.style.display = '';
             if ($('btnAJStop')) $('btnAJStop').style.display = 'none';
         });
     }

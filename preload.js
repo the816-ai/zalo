@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electron', {
         getHoneypotBlacklist: () => ipcRenderer.invoke('zalo:v2:getHoneypotBlacklist'),
         // ── V7/V8: Pipeline ──
         autoJoinGroups: (cookies, groupLinks) => ipcRenderer.invoke('zalo:autoJoinGroups', cookies, groupLinks),
+        scanGroupLinks: (cookies, links) => ipcRenderer.invoke('zalo:scanGroupLinks', cookies, links),
         checkGroupChatStatus: (cookie, groupIds) => ipcRenderer.invoke('zalo:checkGroupChatStatus', cookie, groupIds),
         runFullPipeline: (params) => ipcRenderer.invoke('zalo:runFullPipeline', params),
         cancelPipeline: () => ipcRenderer.invoke('zalo:cancelPipeline'),

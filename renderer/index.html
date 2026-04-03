@@ -185,6 +185,21 @@
                                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                             </svg>
                         </button>
+                        <button class="btn-primary" id="btnSyncDM" style="background:var(--accent-color)" title="Chuyển Nhóm cấu hình vào Pipeline Nhắn Thành Viên để luân chuyển tự động">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            📤 Đồng bộ DM
+                        </button>
+                        <button class="btn-primary" id="btnSyncGroupSpam" style="background:#f59e0b" title="Chuyển Nhóm cấu hình vào Pipeline Spam Nhóm Bầy Đàn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                            🌪 Đồng bộ Nhóm
+                        </button>
                         <button class="btn-primary" id="btnLoginGroup">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
@@ -250,7 +265,8 @@
                         </div>
                         <div class="send-mode-tabs">
                             <button class="mode-tab active" data-mode="phone">📱 Số điện thoại</button>
-                            <button class="mode-tab" data-mode="group">👥 Nhóm Zalo</button>
+                            <button class="mode-tab" data-mode="group">👥 Mời Kết Bạn Zalo</button>
+                            <button class="mode-tab" data-mode="spam-group" style="background:#f59e0b;color:#fff;border:none">📣 Spam Vào Nhóm</button>
                         </div>
 
                         <!-- Panel: Số điện thoại -->
@@ -281,6 +297,28 @@
                         </div>
 
                         <input type="file" id="importFileInput" accept=".txt,.csv" style="display:none" />
+
+                        <!-- Panel: Spam Nhóm -->
+                        <div id="panelSpamGroup" style="display:none; padding:10px; border:1px solid rgba(245,158,11,0.3); border-radius:8px; background:rgba(245,158,11,0.05); margin-bottom:12px;">
+                            <div style="font-size:13px;color:var(--text-muted); margin-bottom:10px;">
+                                ⚠️ <b>Spam Bầy Đàn:</b> Hệ thống sẽ quét qua <b>TOÀN BỘ nhóm từ TẤT CẢ các tài khoản đang lưu</b> và gửi tin nhắn (bốc ngẫu nhiên từ kho tin) vào trong tất cả các nhóm này!
+                            </div>
+                            <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:6px; margin-bottom:10px">
+                                <b style="color:#f59e0b; font-size:12px">Tiến trình Spam Group:</b>
+                                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:11px">
+                                    <span style="color:#fff" id="spamGroupStatus">Đang nghỉ...</span>
+                                    <span id="spamGroupPct" style="color:#10b981; font-weight:bold">0%</span>
+                                </div>
+                                <div style="background:rgba(255,255,255,0.06);border-radius:6px;height:6px;overflow:hidden; margin-top:5px;">
+                                    <div id="spamGroupProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:6px;transition:width 0.3s ease"></div>
+                                </div>
+                            </div>
+                            <button class="btn-primary" id="btnSpamGroupFetch" style="width:100%; justify-content:center; background:linear-gradient(135deg,#f59e0b,#d97706); border:none;">
+                                📥 Lấy Danh Sách Nhóm Khả Dụng
+                            </button>
+                            <div id="spamGroupLog" style="max-height:120px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px; margin-top:10px; font-family:monospace; font-size:11px"></div>
+                        </div>
+
                     </div>
 
                     <!-- Nội dung tin nhắn -->
@@ -319,6 +357,34 @@
                                 <label class="switch"><input type="checkbox" id="stopOnFail" /><span
                                         class="slider"></span></label>
                             </div>
+
+                            <div class="setting-row"
+                                style="margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px;">
+                                <label>🔄 Tự động đổi nick khi gửi nhắn<br><small
+                                        style="color:var(--text-muted);font-weight:400">Tránh spam, xoay vòng các tài
+                                        khoản đang lưu</small></label>
+                                <label class="switch"><input type="checkbox" id="dmRotateAccount" /><span
+                                        class="slider"></span></label>
+                            </div>
+                            <div class="setting-row" id="dmRotateConfigRow"
+                                style="display:none; background: rgba(255,255,255,0.02); padding: 8px; border-radius: 4px; margin-top: 4px;">
+                                <label style="font-weight:400; font-size:13px; color:var(--text-muted)">Số tin nhắn cho
+                                    mỗi TÀI KHOẢN</label>
+                                <input type="number" id="dmRotateCount" value="10" min="1" max="1000"
+                                    style="width: 70px; text-align: center; padding: 4px; border-radius: 4px; border: 1px solid var(--card-border); background: var(--bg-dark); color: var(--text-base);" />
+                            </div>
+
+                            <script>
+                                document.addEventListener('DOMContentLoaded', () => {
+                                    const chk = document.getElementById('dmRotateAccount');
+                                    const row = document.getElementById('dmRotateConfigRow');
+                                    if (chk && row) {
+                                        chk.addEventListener('change', () => {
+                                            row.style.display = chk.checked ? 'flex' : 'none';
+                                        });
+                                    }
+                                });
+                            </script>
                         </div>
 
                         <!-- Anti-Ban Protection Panel -->
@@ -778,8 +844,15 @@
                         <span>👥 Quản lý tài khoản Pool</span>
                         <span class="count-badge" id="settingsPoolCount">0 TK</span>
                     </div>
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Thêm nhiều TK để xoay vòng tự
-                        động — giảm nguy cơ bị ban. Mỗi TK có health score riêng.</div>
+                    <div
+                        style="font-size:12px;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+                        <span>Thêm nhiều TK để xoay vòng tự động — giảm nguy cơ bị ban.</span>
+                        <label
+                            style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--text-h);font-weight:600"
+                            title="Nếu bật, Tool sẽ chạy ẩn mỗi 15 phút để kiểm tra độ sống chết của Cookie tài khoản phụ. Nếu bạn muốn Tool 100% nghỉ ngơi tĩnh, hãy tắt cái này.">
+                            <input type="checkbox" id="toggleWatchdog" checked> 🛡️ Bật Vệ Sĩ Tuần Tra
+                        </label>
+                    </div>
                     <div id="settingsPoolList"
                         style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:10px">
                         <div
@@ -852,7 +925,8 @@
                     </div>
                     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Hệ thống <b>tự xoay vòng</b>
                         + V10 Semantic Spinner biến đổi mỗi lần gửi. Biến: <code>{name}</code> <code>{phone}</code>
-                        <code>{date}</code></div>
+                        <code>{date}</code>
+                    </div>
                     <div style="display:flex;gap:6px;margin-bottom:10px">
                         <textarea id="settingsNewMsg"
                             style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:12px;resize:vertical;min-height:55px"
@@ -1348,6 +1422,9 @@
                             </div>
                             <div style="display:flex;gap:8px;margin-top:12px">
                                 <button class="btn-primary" id="btnAJStart" style="flex:1">▶ Bắt đầu Join</button>
+                                <button class="btn-primary" id="btnAJScan"
+                                    style="flex:1;background:#f59e0b;color:#fff;border-color:#f59e0b">🔍 Lọc Link Mở
+                                    Chat</button>
                                 <button class="btn-sm" id="btnAJStop"
                                     style="display:none;background:rgba(239,68,68,0.15);color:#ef4444">⏹ Dừng</button>
                             </div>
@@ -1390,7 +1467,10 @@
 
                         <!-- Kết quả -->
                         <div class="card" style="margin-top:12px">
-                            <div class="card-title">📋 Kết quả</div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                                <div class="card-title" style="margin-bottom:0">📋 Kết quả</div>
+                                <button class="btn-sm" id="btnAJSaveOpen" style="font-size:10px;background:#10b981;color:#fff;display:none" title="Chỉ lưu các nhóm Mở Chat">💾 Lưu link Mở Chat</button>
+                            </div>
                             <div id="ajResultList" style="max-height:200px;overflow-y:auto">
                                 <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px">Chưa
                                     có kết quả</div>
@@ -1457,29 +1537,43 @@
                     <div>
                         <div class="card">
                             <div class="card-title">2️⃣ Nội dung tin nhắn</div>
-                            <textarea id="dmMsgContent" rows="5" placeholder="Nhập nội dung tin nhắn DM...&#10;Biến hỗ trợ: <Name> = Tên Zalo&#10;Spin: {Chào|Hi|Xin chào} <Name>!"
+                            <textarea id="dmMsgContent" rows="5"
+                                placeholder="Nhập nội dung tin nhắn DM...&#10;Biến hỗ trợ: <Name> = Tên Zalo&#10;Spin: {Chào|Hi|Xin chào} <Name>!"
                                 style="width:100%;background:var(--bg-input);border:1px solid var(--card-border);border-radius:8px;padding:10px;color:var(--text-h);font-size:12px;resize:vertical"></textarea>
-                            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:4px 8px;background:rgba(102,126,234,0.08);border-radius:6px">
-                                💡 <code>&lt;Name&gt;</code> = Tên Zalo người nhận · <code>{A|B|C}</code> = Chọn ngẫu nhiên
+                            <div
+                                style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:4px 8px;background:rgba(102,126,234,0.08);border-radius:6px">
+                                💡 <code>&lt;Name&gt;</code> = Tên Zalo người nhận · <code>{A|B|C}</code> = Chọn ngẫu
+                                nhiên
                             </div>
 
                             <!-- Cấu hình tương tác -->
-                            <div style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:8px">
-                                <div style="font-size:11px;font-weight:600;color:var(--text-h);margin-bottom:8px">⚙️ Cấu hình tương tác</div>
-                                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:5px">
-                                    <input type="checkbox" id="dmFilterAdmin" checked style="accent-color:#667eea"> Bỏ qua Quản trị viên
+                            <div
+                                style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:8px">
+                                <div style="font-size:11px;font-weight:600;color:var(--text-h);margin-bottom:8px">⚙️ Cấu
+                                    hình tương tác</div>
+                                <label
+                                    style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:5px">
+                                    <input type="checkbox" id="dmFilterAdmin" checked style="accent-color:#667eea"> Bỏ
+                                    qua Quản trị viên
                                 </label>
-                                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:5px">
-                                    <input type="checkbox" id="dmFilterDuplicate" checked style="accent-color:#667eea"> Không gửi trùng người đã gửi
+                                <label
+                                    style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:5px">
+                                    <input type="checkbox" id="dmFilterDuplicate" checked style="accent-color:#667eea">
+                                    Không gửi trùng người đã gửi
                                 </label>
-                                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
-                                    <input type="checkbox" id="dmAddFriend" style="accent-color:#10b981"> 🤝 Kết bạn sau khi gửi DM
+                                <label
+                                    style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
+                                    <input type="checkbox" id="dmAddFriend" style="accent-color:#10b981"> 🤝 Kết bạn sau
+                                    khi gửi DM
                                 </label>
-                                <div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text-muted)">
+                                <div
+                                    style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text-muted)">
                                     <span>Delay:</span>
-                                    <input type="number" id="dmDelayMin" placeholder="min" min="0" step="0.5" style="width:50px;padding:4px;border-radius:6px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:11px;text-align:center">
+                                    <input type="number" id="dmDelayMin" placeholder="min" min="0" step="0.5"
+                                        style="width:50px;padding:4px;border-radius:6px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:11px;text-align:center">
                                     <span>—</span>
-                                    <input type="number" id="dmDelayMax" placeholder="max" min="0" step="0.5" style="width:50px;padding:4px;border-radius:6px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:11px;text-align:center">
+                                    <input type="number" id="dmDelayMax" placeholder="max" min="0" step="0.5"
+                                        style="width:50px;padding:4px;border-radius:6px;border:1px solid var(--card-border);background:rgba(255,255,255,0.04);color:var(--text-h);font-size:11px;text-align:center">
                                     <span>giây (trống = tự động)</span>
                                 </div>
                             </div>
@@ -1678,6 +1772,7 @@
     <script src="renderer-dm.js"></script>
     <script src="renderer-autojoin.js"></script>
     <script src="renderer-nurture.js"></script>
+    <script src="renderer-group-spam.js"></script>
 </body>
 
 </html>

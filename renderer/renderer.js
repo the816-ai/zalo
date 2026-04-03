@@ -44,6 +44,38 @@ function seedGroups() {
 // INIT
 // ══════════════════════════════════════════════════════════════════
 
+window.checkLoginGlobal = async function () {
+    window.S = window.S || {};
+    if (window.S && window.S.loggedIn) return true;
+    try {
+        // 1. Ưu tiên kiểm tra Tài khoản Chính
+        const cookie = await el.store.get('cookie');
+        if (cookie && cookie.trim() !== '') {
+            window.S.loggedIn = true;
+            window.S.cookie = cookie;
+            return true;
+        }
+
+        // 2. Chấp nhận hệ thống đang sống nếu có bét nhất 1 Nick Phụ
+        let pool = [];
+        if (typeof window.electron.zalo.poolGetAll === 'function') {
+            pool = await window.electron.zalo.poolGetAll();
+        } else {
+            pool = await el.store.get('settingsPool');
+        }
+
+        if (pool && Array.isArray(pool) && pool.length > 0) {
+            window.S.loggedIn = true;
+            window.S.cookie = pool[0].cookie || 'QR_SESSION'; // Mượn Nick Phụ để Harvest
+            return true;
+        }
+    } catch (e) {
+        console.error('CheckLoginGlobal Error:', e);
+    }
+    return false;
+};
+
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     seedGroups();
@@ -133,6 +165,33 @@ function initGroups() {
 
     document.getElementById('btnLoginGroup').addEventListener('click', () => navigate('settings'));
 
+    // ── ĐỒNG BỘ NHÓM (SWARM SYNC) ──
+    document.getElementById('btnSyncDM')?.addEventListener('click', () => {
+        if (S.selectedGroups.size === 0) return toast('Vui lòng chọn ít nhất 1 nhóm để đồng bộ DM!', 'warning');
+        
+        window._swarmDMHarvestPayload = Array.from(S.selectedGroups).map(id => S.groups.find(g => g.id === id)).filter(Boolean);
+        const dmInput = document.getElementById('dmSourceGroup');
+        if (dmInput) dmInput.value = `[ĐÃ ĐỒNG BỘ ${window._swarmDMHarvestPayload.length} NHÓM TỪ BẢNG]`;
+        
+        toast(`📤 Đã xuất dữ liệu ${window._swarmDMHarvestPayload.length} nhóm sang máy Harvest DM`, 'success');
+        navigate('dm');
+    });
+
+    document.getElementById('btnSyncGroupSpam')?.addEventListener('click', () => {
+        if (S.selectedGroups.size === 0) return toast('Vui lòng chọn ít nhất 1 nhóm để đồng bộ Group Spam!', 'warning');
+        
+        // Hút nguyên kiện cấu trúc dữ liệu sang Bầy Đàn
+        window._swarmGroupPayload = Array.from(S.selectedGroups).map(id => {
+            return S.groups.find(g => g.id === id);
+        }).filter(Boolean);
+        
+        toast(`🌪 Đã đồng bộ ${window._swarmGroupPayload.length} Group (Cùng thẻ ID Tài Khoản) sang Spam!`, 'success');
+        
+        // Chuyển UI
+        navigate('bulk-send');
+        document.querySelector('[data-mode="spam-group"]')?.click();
+    });
+
     // Group select modal
     document.getElementById('groupModalSearch').addEventListener('input', e => renderGroupSelectList(e.target.value));
     document.getElementById('btnConfirmGroups').addEventListener('click', confirmGroupsSelected);
@@ -160,6 +219,7 @@ function renderGroups(query = '') {
     <div class="group-card" data-id="${g.id}">
       <div onclick="toggleGroupSelect('${g.id}', this.closest('.group-card'))" style="cursor:pointer">
         <div class="gc-name">${g.name}</div>
+        <div style="font-size:10px;color:#10b981;margin-bottom:4px;font-weight:600">👤 ${g._belongToName || 'NICK CHÍNH'}</div>
         <div class="gc-id">ID: ${g.id}</div>
         <div class="gc-meta">
           <div class="gc-row">
@@ -205,11 +265,15 @@ let _groupSendStop = false;
 const _zwCharsGlobal = ['\u200b', '\u200c', '\u200d', '\ufeff'];
 function spinMsg(baseMsg, recipientName) {
     let result = baseMsg;
-    result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+    result = result.replace(/\{([^}]+)\}/g, function (_, opts) {
         var arr = opts.split('|');
         return arr[Math.floor(Math.random() * arr.length)];
     });
-    result = result.replace(/<Name>/gi, recipientName || 'bạn');
+
+    // Tách tên ngắn gọn
+    let shortName = recipientName ? recipientName.trim() : 'bạn';
+    if (shortName.includes(' ')) shortName = shortName.split(' ').pop();
+    result = result.replace(/<Name>/gi, shortName);
     const pos = Math.floor(Math.random() * Math.max(1, result.length - 1)) + 1;
     const zw = _zwCharsGlobal[Math.floor(Math.random() * _zwCharsGlobal.length)];
     result = result.slice(0, pos) + zw + result.slice(pos);
@@ -507,7 +571,7 @@ function stopBulkSend() {
     S.send = { running: false, paused: false, ok: 0, err: 0, wait: 0 };
     setSendBtns(false);
     // Gửi cancel signal tới backend
-    try { el.zalo?.cancelBulkSend?.(); } catch (_) {}
+    try { el.zalo?.cancelBulkSend?.(); } catch (_) { }
 }
 
 async function refreshAccountList() {
@@ -561,22 +625,22 @@ async function refreshAccountList() {
                 if (sel) sel.value = a.destGroupIds[0];
             }
         }
-    } catch (_) {}
+    } catch (_) { }
 }
 
 // Global function cho onclick
-window.removePoolAccount = async function(uid) {
+window.removePoolAccount = async function (uid) {
     await el.zalo.poolRemove(uid);
     refreshAccountList();
     toast('Đã xóa tài khoản khỏi pool', 'info');
 };
 
-window.toggleAccountGroups = function(uid) {
+window.toggleAccountGroups = function (uid) {
     const panel = document.getElementById(`accountGroups_${uid}`);
     if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 };
 
-window.saveAccountGroupMapping = async function(uid) {
+window.saveAccountGroupMapping = async function (uid) {
     const srcSel = document.getElementById(`srcGroup_${uid}`);
     const dstSel = document.getElementById(`dstGroup_${uid}`);
     const sourceGroupId = srcSel?.value || '';
@@ -616,9 +680,9 @@ async function startBulkSend() {
                 const idx = Math.floor(Math.random() * storedMsgs.length);
                 msg = storedMsgs[idx];
                 document.getElementById('msgInput').value = msg;
-                toast(`📋 Đã lấy tin nhắn #${idx+1} từ kho`, 'info');
+                toast(`📋 Đã lấy tin nhắn #${idx + 1} từ kho`, 'info');
             }
-        } catch(_) {}
+        } catch (_) { }
     }
     if (!msg) { toast('Nhập nội dung tin nhắn hoặc thêm vào Kho Tin Nhắn trong Cài Đặt!', 'warning'); return; }
 
@@ -764,7 +828,7 @@ async function startBulkSend() {
     const variantMsg = (baseMsg, recipientName) => {
         let result = baseMsg;
         // Spin syntax {A|B|C} → chọn ngẫu nhiên
-        result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+        result = result.replace(/\{([^}]+)\}/g, function (_, opts) {
             var arr = opts.split('|');
             return arr[Math.floor(Math.random() * arr.length)];
         });
@@ -961,7 +1025,7 @@ function doSendToMembers(members, groupName, cookie, msg) {
     const variantMsg = (baseMsg, recipientName) => {
         let result = baseMsg;
         // Spin syntax {A|B|C} → chọn ngẫu nhiên
-        result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+        result = result.replace(/\{([^}]+)\}/g, function (_, opts) {
             var arr = opts.split('|');
             return arr[Math.floor(Math.random() * arr.length)];
         });
@@ -1678,7 +1742,7 @@ function initSettings() {
             await el.zalo.poolAdd(S.cookie, name, uid);
             refreshAccountList();
             log('info', `📋 Pool: TK ${name} đã thêm`, 'send');
-        } catch (_) {}
+        } catch (_) { }
 
         // Tự động tải danh sách nhóm
         loadRealGroups();
@@ -1767,21 +1831,60 @@ async function doLogin() {
 
 async function loadRealGroups() {
     if (!S.loggedIn) return;
-    const cookie = S.cookie;
-    log('info', '📋 Đang tải danh sách nhóm Zalo...', 'send');
+    
+    // Nút load groups effect
+    const btn = document.getElementById('btnRefreshGroups');
+    if (btn) btn.style.pointerEvents = 'none';
+
+    log('info', '📋 Đang quét toàn bộ danh sách nhóm hệ sinh thái Zalo...', 'send');
     try {
-        const result = await el.zalo.getGroups(cookie);
-        if (result.success && result.groups.length > 0) {
-            S.groups = result.groups;
+        let allGroups = [];
+        let seenIds = new Set();
+        
+        // 1. Quét Nick Chính
+        const mainCookie = S.cookie;
+        const mainResult = await el.zalo.getGroups(mainCookie);
+        if (mainResult && mainResult.success && mainResult.groups) {
+            mainResult.groups.forEach(g => {
+                if (!seenIds.has(g.id)) {
+                    seenIds.add(g.id);
+                    allGroups.push({ ...g, _belongToCookie: mainCookie, _belongToName: (S.account ? S.account.name : 'NICK CHÍNH') });
+                }
+            });
+        }
+        
+        // 2. Quét Account Pool (TK Phụ)
+        const pool = (await el.store.get('settingsPool')) || [];
+        for (let i = 0; i < pool.length; i++) {
+            const tk = pool[i];
+            if (tk.status === 'dead' || !tk.cookie) continue;
+            
+            log('info', `⏳ Đang quét nhóm của thẻ bài Phụ: ${tk.name || '#' + (i+1)}...`, 'send');
+            const res = await el.zalo.getGroups(tk.cookie);
+            if (res && res.success && res.groups) {
+                res.groups.forEach(g => {
+                    if (!seenIds.has(g.id)) {
+                        seenIds.add(g.id);
+                        allGroups.push({ ...g, _belongToCookie: tk.cookie, _belongToName: tk.name || 'Acc Phụ' });
+                    }
+                });
+            }
+        }
+        
+        // 3. Hiển thị
+        if (allGroups.length > 0) {
+            S.groups = allGroups;
             renderGroups();
-            log('success', `📋 Đã tải ${result.groups.length} nhóm!`, 'send');
-            toast(`✅ Tải được ${result.groups.length} nhóm Zalo`, 'success');
+            log('success', `📋 Càn quét thành công ${allGroups.length} nhóm từ ${pool.length + 1} Tài Khoản!`, 'send');
+            if (typeof toast==='function') toast(`✅ Gộp được ${allGroups.length} nhóm Toàn Cục`, 'success');
         } else {
-            log('error', `❌ Không tải được nhóm: ${result.error || 'Không có nhóm'}`, 'send');
+            log('error', `❌ Không tìm thấy nhóm nào trên bất kỳ account nào!`, 'send');
         }
     } catch (e) {
-        log('error', '❌ Lỗi tải nhóm: ' + e.message, 'send');
+        log('error', '❌ Lỗi càn quét cấu trúc nhóm: ' + e.message, 'send');
     }
+    
+    if (btn) btn.style.pointerEvents = '';
 }
 
 function updateAccountUI() {
@@ -1810,8 +1913,8 @@ function log(type, msg, target) {
     div.className = `log-entry ${type}`;
     div.innerHTML = `<span class="log-time">${now}</span><span class="log-msg">${msg}</span>`;
     el.appendChild(div);
+    if (el.childElementCount > 300) el.removeChild(el.firstChild);
     el.scrollTop = el.scrollHeight;
-    while (el.children.length > 300) el.removeChild(el.firstChild);
 }
 
 function toast(msg, type = 'info') {
@@ -1892,8 +1995,8 @@ async function loadState() {
     try {
         const all = await el.store.getAll();
         const cookie = all.cookie;
-        // FIX #6: Accept cookie dù là QR session hay cookie thật, miễn length > 10
-        if (all.loggedIn && cookie && cookie.length > 10) {
+        // FIX: Accept cookie dù là QR session hay cookie thật
+        if (all.loggedIn && cookie && (cookie.length > 10 || cookie === 'QR_SESSION')) {
             S.loggedIn = true;
             S.cookie = cookie;
             S.account = all.account || { name: 'Người dùng Zalo', phone: '***' };
@@ -1947,6 +2050,7 @@ function cpyLog(msg, type = 'info') {
     const ph = div.querySelector('span');
     if (ph) ph.remove();
     div.appendChild(line);
+    if (div.childElementCount > 300) div.removeChild(div.firstChild);
     div.scrollTop = div.scrollHeight;
 }
 
@@ -2263,14 +2367,14 @@ function initCopyGroup() {
 
     // ── Helpers: store ──
     async function dbGet(key, def = '') {
-        try { return (await ipc?.invoke('store:get', key)) ?? def; } catch(_) { return def; }
+        try { return (await ipc?.invoke('store:get', key)) ?? def; } catch (_) { return def; }
     }
     async function dbSet(key, val) {
-        try { await ipc?.invoke('store:set', key, val); } catch(_) {}
+        try { await ipc?.invoke('store:set', key, val); } catch (_) { }
     }
 
-    function lines(str) { return (str||'').split('\n').map(l=>l.trim()).filter(Boolean); }
-    function badge(id, arr, unit='') {
+    function lines(str) { return (str || '').split('\n').map(l => l.trim()).filter(Boolean); }
+    function badge(id, arr, unit = '') {
         const el = document.getElementById(id);
         if (el) el.textContent = `${arr.length} ${unit}`;
     }
@@ -2278,14 +2382,14 @@ function initCopyGroup() {
     // ── Load all persisted values on DOMContentLoaded / navigate ──
     async function loadDB() {
         const [cookies, groups, customers, dest, msgs, tgToken, tgChatId, maxPG] = await Promise.all([
-            dbGet('pipe_cookies',''), dbGet('pipe_groups',''),
-            dbGet('pipe_customers',''), dbGet('pipe_dest',''),
-            dbGet('pipe_msgs','[]'), dbGet('pipe_tg_token',''),
-            dbGet('pipe_tg_chatid',''), dbGet('pipe_max_per_group','200')
+            dbGet('pipe_cookies', ''), dbGet('pipe_groups', ''),
+            dbGet('pipe_customers', ''), dbGet('pipe_dest', ''),
+            dbGet('pipe_msgs', '[]'), dbGet('pipe_tg_token', ''),
+            dbGet('pipe_tg_chatid', ''), dbGet('pipe_max_per_group', '200')
         ]);
-        setVal('pipeCookies', cookies);    badge('pipeAcctCount',   lines(cookies), 'TK');
-        setVal('pipeGroupLinks', groups);  badge('pipeLinkCount',   lines(groups),  'links');
-        setVal('pipeCustomers', customers);badge('pipeCustomerCount',lines(customers),'người');
+        setVal('pipeCookies', cookies); badge('pipeAcctCount', lines(cookies), 'TK');
+        setVal('pipeGroupLinks', groups); badge('pipeLinkCount', lines(groups), 'links');
+        setVal('pipeCustomers', customers); badge('pipeCustomerCount', lines(customers), 'người');
         setVal('pipeDestGroups', dest);
         setVal('pipeTgToken', tgToken);
         setVal('pipeTgChatId', tgChatId);
@@ -2297,7 +2401,7 @@ function initCopyGroup() {
             const arr = JSON.parse(msgs);
             arr.forEach(m => addMsgCard(m, false));
             badge('pipeMsgCount', arr, 'tin');
-        } catch(_){}
+        } catch (_) { }
     }
 
     function setVal(id, val) {
@@ -2343,13 +2447,13 @@ function initCopyGroup() {
     }
 
     function escHtml(s) {
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     // ── Stage Highlight ──
-    const stageMap = { joining:'pstage1', filtering:'pstage2', harvesting:'pstage3', scoring:'pstage4', sending:'pstage5' };
+    const stageMap = { joining: 'pstage1', filtering: 'pstage2', harvesting: 'pstage3', scoring: 'pstage4', sending: 'pstage5' };
     function highlightStage(stageName) {
-        ['pstage1','pstage2','pstage3','pstage4','pstage5'].forEach(id => {
+        ['pstage1', 'pstage2', 'pstage3', 'pstage4', 'pstage5'].forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
             el.style.background = ''; el.style.borderColor = 'rgba(255,255,255,0.08)'; el.style.color = '';
@@ -2380,11 +2484,11 @@ function initCopyGroup() {
     let pipeOkN = 0, pipeFailN = 0;
     window.electron?.onPipelineProgress?.((p) => {
         const status = document.getElementById('pipeStatusText');
-        const pct    = document.getElementById('pipePct');
-        const fill   = document.getElementById('pipeProgressFill');
+        const pct = document.getElementById('pipePct');
+        const fill = document.getElementById('pipeProgressFill');
         if (status) status.textContent = p.status || '';
-        if (pct)    pct.textContent = `${p.pct||0}%`;
-        if (fill)   fill.style.width = `${p.pct||0}%`;
+        if (pct) pct.textContent = `${p.pct || 0}%`;
+        if (fill) fill.style.width = `${p.pct || 0}%`;
         if (p.stage) highlightStage(p.stage);
         if (p.pipeline?.harvestedCount) {
             const el = document.getElementById('pipeHarvested');
@@ -2394,12 +2498,12 @@ function initCopyGroup() {
         if (p.stage === 'done' || p.stage === 'error') {
             resetBtns();
             if (p.pipeline?.sendResult) {
-                pipeOkN   += p.pipeline.sendResult.sent   || 0;
+                pipeOkN += p.pipeline.sendResult.sent || 0;
                 pipeFailN += p.pipeline.sendResult.failed || 0;
-                const elOk   = document.getElementById('pipeOk');
+                const elOk = document.getElementById('pipeOk');
                 const elFail = document.getElementById('pipeFail');
-                if (elOk)   elOk.textContent   = pipeOkN;
-                if (elFail) elFail.textContent  = pipeFailN;
+                if (elOk) elOk.textContent = pipeOkN;
+                if (elFail) elFail.textContent = pipeFailN;
             }
             if (p.stage === 'done') Object.keys(stageMap).forEach(s => markStageDone(s));
         }
@@ -2409,7 +2513,7 @@ function initCopyGroup() {
         const s = document.getElementById('btnStartPipeline');
         const x = document.getElementById('btnStopPipeline');
         if (s) { s.disabled = false; s.textContent = '⚡ Chạy Pipeline'; }
-        if (x)   x.disabled = true;
+        if (x) x.disabled = true;
     }
 
     // ── Wire buttons after DOM ready ──
@@ -2424,7 +2528,7 @@ function initCopyGroup() {
         });
         document.getElementById('btnPipeClearAcct')?.addEventListener('click', () => {
             if (!confirm('Xóa toàn bộ cookies đã lưu?')) return;
-            setVal('pipeCookies',''); dbSet('pipe_cookies','');
+            setVal('pipeCookies', ''); dbSet('pipe_cookies', '');
             badge('pipeAcctCount', [], 'TK');
         });
 
@@ -2436,7 +2540,7 @@ function initCopyGroup() {
             addPipeLog(`✅ Đã lưu ${lines(v).length} groups`);
         });
         document.getElementById('btnPipeAppendGroups')?.addEventListener('click', async () => {
-            const cur  = await dbGet('pipe_groups','');
+            const cur = await dbGet('pipe_groups', '');
             const newV = document.getElementById('pipeGroupLinks')?.value || '';
             const combined = [...new Set([...lines(cur), ...lines(newV)])].join('\n');
             setVal('pipeGroupLinks', combined);
@@ -2446,7 +2550,7 @@ function initCopyGroup() {
         });
         document.getElementById('btnPipeClearGroups')?.addEventListener('click', () => {
             if (!confirm('Xóa toàn bộ danh sách nhóm?')) return;
-            setVal('pipeGroupLinks',''); dbSet('pipe_groups','');
+            setVal('pipeGroupLinks', ''); dbSet('pipe_groups', '');
             badge('pipeLinkCount', [], 'links');
         });
 
@@ -2463,7 +2567,7 @@ function initCopyGroup() {
             addPipeLog(`✅ Đã lưu ${lines(v).length} khách hàng`);
         });
         document.getElementById('btnPipeAppendCustomers')?.addEventListener('click', async () => {
-            const cur  = await dbGet('pipe_customers','');
+            const cur = await dbGet('pipe_customers', '');
             const newV = document.getElementById('pipeCustomers')?.value || '';
             const combined = [...new Set([...lines(cur), ...lines(newV)])].join('\n');
             setVal('pipeCustomers', combined);
@@ -2473,7 +2577,7 @@ function initCopyGroup() {
         });
         document.getElementById('btnPipeClearCustomers')?.addEventListener('click', () => {
             if (!confirm('Xóa danh sách khách hàng?')) return;
-            setVal('pipeCustomers',''); dbSet('pipe_customers','');
+            setVal('pipeCustomers', ''); dbSet('pipe_customers', '');
             badge('pipeCustomerCount', [], 'người');
         });
 
@@ -2491,7 +2595,7 @@ function initCopyGroup() {
         });
 
         // Settings — auto-save on blur
-        ['pipeTgToken','pipeTgChatId'].forEach(id => {
+        ['pipeTgToken', 'pipeTgChatId'].forEach(id => {
             document.getElementById(id)?.addEventListener('blur', (e) => {
                 dbSet(id === 'pipeTgToken' ? 'pipe_tg_token' : 'pipe_tg_chatid', e.target.value);
             });
@@ -2514,18 +2618,18 @@ function initCopyGroup() {
         // Reset all DB
         document.getElementById('btnPipeReset')?.addEventListener('click', () => {
             if (!confirm('Xóa TOÀN BỘ dữ liệu Pipeline (accounts, groups, messages)?')) return;
-            ['pipe_cookies','pipe_groups','pipe_customers','pipe_dest','pipe_msgs','pipe_tg_token','pipe_tg_chatid'].forEach(k => dbSet(k,''));
-            ['pipeCookies','pipeGroupLinks','pipeCustomers','pipeDestGroups','pipeTgToken','pipeTgChatId'].forEach(id => setVal(id,''));
+            ['pipe_cookies', 'pipe_groups', 'pipe_customers', 'pipe_dest', 'pipe_msgs', 'pipe_tg_token', 'pipe_tg_chatid'].forEach(k => dbSet(k, ''));
+            ['pipeCookies', 'pipeGroupLinks', 'pipeCustomers', 'pipeDestGroups', 'pipeTgToken', 'pipeTgChatId'].forEach(id => setVal(id, ''));
             msgLibrary = []; renderMsgList();
-            ['pipeAcctCount','pipeLinkCount','pipeCustomerCount','pipeMsgCount'].forEach(id => {
-                const el = document.getElementById(id); if(el) el.textContent = '0';
+            ['pipeAcctCount', 'pipeLinkCount', 'pipeCustomerCount', 'pipeMsgCount'].forEach(id => {
+                const el = document.getElementById(id); if (el) el.textContent = '0';
             });
             addPipeLog('🗑 Đã xóa toàn bộ DB Pipeline', 'err');
         });
 
         // Clear log
         document.getElementById('btnClearPipeLog')?.addEventListener('click', () => {
-            const b = document.getElementById('pipeLogBody'); if(b) b.innerHTML='';
+            const b = document.getElementById('pipeLogBody'); if (b) b.innerHTML = '';
         });
 
         // ── START PIPELINE ──
@@ -2537,15 +2641,15 @@ function initCopyGroup() {
                 const allCookies = [primaryCookie, ...pool.map(t => t.cookie)].filter(Boolean);
                 cookiesRaw = allCookies.join('\n');
             }
-            const cookies  = lines(cookiesRaw);
+            const cookies = lines(cookiesRaw);
             const groupLinks = lines(document.getElementById('pipeGroupLinks')?.value || '');
-            const customers  = lines(document.getElementById('pipeCustomers')?.value || '');
+            const customers = lines(document.getElementById('pipeCustomers')?.value || '');
             const destGroups = lines(document.getElementById('pipeDestGroups')?.value || '');
             const maxPerGroup = parseInt(document.getElementById('pipeMaxPerGroup')?.value || '200');
-            const phoneScan   = document.getElementById('pipePhoneScan')?.checked || false;
+            const phoneScan = document.getElementById('pipePhoneScan')?.checked || false;
 
             const tgSettings = (await ipc?.invoke('store:get', 'telegramSettings')) || {};
-            const tgToken  = tgSettings.token  || '';
+            const tgToken = tgSettings.token || '';
             const tgChatId = tgSettings.chatId || '';
 
             let msgs = msgLibrary.slice();
@@ -2560,16 +2664,16 @@ function initCopyGroup() {
             if (!msgs.length) { alert('Cần ít nhất 1 tin nhắn trong kho! Thêm tại Cài Đặt → Kho Tin Nhắn.'); return; }
 
             pipeOkN = 0; pipeFailN = 0;
-            ['pipeOk','pipeFail','pipeHarvested'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent='0'; });
+            ['pipeOk', 'pipeFail', 'pipeHarvested'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
             document.getElementById('pipeProgressFill').style.width = '0%';
             document.getElementById('pipeStatusText').textContent = 'Đang khởi động...';
             document.getElementById('pipePct').textContent = '0%';
             document.getElementById('pipeLogBody').innerHTML = '';
 
             const btnStart = document.getElementById('btnStartPipeline');
-            const btnStop  = document.getElementById('btnStopPipeline');
+            const btnStop = document.getElementById('btnStopPipeline');
             if (btnStart) { btnStart.disabled = true; btnStart.textContent = '⏳ Đang chạy...'; }
-            if (btnStop)    btnStop.disabled = false;
+            if (btnStop) btnStop.disabled = false;
 
             highlightStage('joining');
             addPipeLog(`🚀 Pipeline: ${groupLinks.length} groups | ${cookies.length} TK | ${msgs.length} msgs | ${customers.length} KH | TG: ${tgToken ? '✓' : '✗'}`);
@@ -2581,7 +2685,7 @@ function initCopyGroup() {
                     telegramToken: tgToken, telegramChatId: tgChatId,
                     opts: { maxPerGroup, phoneScan }
                 });
-            } catch(e) {
+            } catch (e) {
                 addPipeLog(`❌ Lỗi: ${e.message}`, 'err');
                 resetBtns();
             }
@@ -2622,7 +2726,7 @@ function initCopyGroup() {
     $('btnPoolLoginQR')?.addEventListener('click', async () => {
         showPoolQrModal();
         try { await ipc?.invoke('zalo:poolLoginQR'); }
-        catch(e) { if ($('poolQrStatus')) $('poolQrStatus').textContent = '❌ Lỗi: ' + e.message; }
+        catch (e) { if ($('poolQrStatus')) $('poolQrStatus').textContent = '❌ Lỗi: ' + e.message; }
     });
     $('btnPoolQrClose')?.addEventListener('click', () => hidePoolQrModal());
 
@@ -2651,7 +2755,7 @@ function initCopyGroup() {
             }
             window.dispatchEvent(new CustomEvent('pool:refresh'));
             setTimeout(hidePoolQrModal, 1500);
-        } catch(e) {
+        } catch (e) {
             if (status) { status.textContent = '❌ ' + e.message; status.style.color = '#ef4444'; }
         }
     });
@@ -2733,7 +2837,7 @@ function initCopyGroup() {
                             showConnectedBanner({ uid: r.user.uid, name: r.user.name || r.displayName });
                         }
                     }
-                } catch(_) {}
+                } catch (_) { }
             }
         });
     }
@@ -2758,20 +2862,53 @@ function initCopyGroup() {
         list.innerHTML = settingsPool.map((tk, i) => {
             const initial = (tk.name || 'T')[0].toUpperCase();
             const cookiePreview = tk.cookie ? tk.cookie.slice(0, 20) + '...' : '—';
-            return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.03)">'
+            const isDead = tk.status === 'dead';
+            const statusBadge = isDead
+                ? '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(239,68,68,0.15);color:#ef4444">❌ Chết/Văng</span>'
+                : '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(16,185,129,0.15);color:#10b981">Sẵn sàng</span>';
+
+            return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid ' + (isDead ? 'rgba(239,68,68,0.3)' : 'var(--card-border)') + ';background:rgba(255,255,255,0.03)">'
                 + '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px">' + initial + '</div>'
-                + '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">' + (tk.name || 'TK ' + (i+1)) + '</div>'
+                + '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px' + (isDead ? ';color:#ef4444;text-decoration:line-through' : '') + '">' + (tk.name || 'TK ' + (i + 1)) + '</div>'
                 + '<div style="font-size:10px;color:var(--text-muted)">Cookie: ' + cookiePreview + '</div></div>'
-                + '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(16,185,129,0.15);color:#10b981">Sẵn sàng</span>'
+                + statusBadge
                 + '<button onclick="window._removePoolTk(' + i + ')" style="background:rgba(239,68,68,0.1);color:#ef4444;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px">✕</button>'
                 + '</div>';
         }).join('');
     }
 
+    // ── Vệ Sĩ Ngầm Wachdog (Session Keep-Alive) ──
+    async function checkPoolHealth() {
+        const toggle = document.getElementById('toggleWatchdog');
+        if (toggle && !toggle.checked) return; // User tắt thì tháo gác không kiểm tra
+
+        if (!settingsPool || settingsPool.length === 0) return;
+        let changed = false;
+        for (let i = 0; i < settingsPool.length; i++) {
+            const tk = settingsPool[i];
+            if (tk.status === 'dead') continue; // Bỏ qua thằng chết rồi
+            try {
+                const r = await ipc?.invoke('zalo:verify', tk.cookie);
+                if (!r || !r.success) {
+                    tk.status = 'dead';
+                    changed = true;
+                }
+            } catch (e) {
+                tk.status = 'dead';
+                changed = true;
+            }
+        }
+        if (changed) {
+            await store.set('settingsPool', settingsPool);
+            renderSettingsPool();
+        }
+    }
+    setInterval(checkPoolHealth, 15 * 60 * 1000); // 15 phút tuần tra 1 lần
+
     window._removePoolTk = async (i) => {
         settingsPool.splice(i, 1);
         await store.set('settingsPool', settingsPool);
-        try { await ipc?.invoke('zalo:accountPool:remove', settingsPool[i]?.uid); } catch(_) {}
+        try { await ipc?.invoke('zalo:accountPool:remove', settingsPool[i]?.uid); } catch (_) { }
         renderSettingsPool();
     };
 
@@ -2790,12 +2927,14 @@ function initCopyGroup() {
             $('settingsPoolCookie').value = '';
             $('settingsPoolName').value = '';
             renderSettingsPool();
-        } catch(e) {
+        } catch (e) {
             alert('Lỗi xác thực cookie: ' + e.message);
         }
     });
 
     loadSettingsPool();
+    // Đồng bộ UI khi có tài khoản mới từ initPoolQR
+    window.addEventListener('pool:refresh', loadSettingsPool);
 
     // ── 3. Telegram Thông Báo ──
     async function loadTelegramSettings() {
@@ -2808,23 +2947,23 @@ function initCopyGroup() {
         const token = $('settingsTgToken')?.value?.trim();
         const chatId = $('settingsTgChatId')?.value?.trim();
         const result = $('tgTestResult');
-        if (!token || !chatId) { if(result) result.textContent = '⚠️ Nhập token và chat ID!'; return; }
-        if(result) result.textContent = '⏳ Đang gửi...';
+        if (!token || !chatId) { if (result) result.textContent = '⚠️ Nhập token và chat ID!'; return; }
+        if (result) result.textContent = '⏳ Đang gửi...';
         try {
             const res = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
                 method: 'POST',
-                headers: {'Content-Type':'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: chatId, text: '✅ Zalo Bulk Tool Pro — Kết nối Telegram thành công!' })
             });
             const data = await res.json();
             if (data.ok) {
-                if(result) { result.textContent = '✅ Gửi thành công!'; result.style.color = '#10b981'; }
+                if (result) { result.textContent = '✅ Gửi thành công!'; result.style.color = '#10b981'; }
                 await store.set('telegramSettings', { token, chatId });
             } else {
-                if(result) { result.textContent = '❌ ' + (data.description || 'Lỗi'); result.style.color = '#ef4444'; }
+                if (result) { result.textContent = '❌ ' + (data.description || 'Lỗi'); result.style.color = '#ef4444'; }
             }
-        } catch(e) {
-            if(result) { result.textContent = '❌ ' + e.message; result.style.color = '#ef4444'; }
+        } catch (e) {
+            if (result) { result.textContent = '❌ ' + e.message; result.style.color = '#ef4444'; }
         }
     });
 
@@ -2848,9 +2987,9 @@ function initCopyGroup() {
             return;
         }
         list.innerHTML = settingsMsgs.map((msg, i) => {
-            const preview = msg.length > 120 ? msg.slice(0,120) + '…' : msg;
+            const preview = msg.length > 120 ? msg.slice(0, 120) + '…' : msg;
             return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--card-border);background:rgba(255,255,255,0.03)">'
-                + '<span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;flex-shrink:0;margin-top:1px">#' + (i+1) + '</span>'
+                + '<span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;flex-shrink:0;margin-top:1px">#' + (i + 1) + '</span>'
                 + '<div style="flex:1;font-size:12px;color:var(--text-h);white-space:pre-wrap;word-break:break-all">' + preview + '</div>'
                 + '<button onclick="window._removeSettingsMsg(' + i + ')" style="background:rgba(239,68,68,0.1);color:#ef4444;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;flex-shrink:0">✕</button>'
                 + '</div>';
@@ -2942,12 +3081,12 @@ function initCopyGroup() {
         const links = parseGroupLinks(raw);
         if (links.length === 0) { toast('Nhập ít nhất 1 link nhóm!', 'warning'); return; }
 
-        // Get cookie — QR login có thể không có cookie string, dùng null để zca-js dùng session cache
-        const cookie = S.cookie || (await el.store.get('cookie')) || null;
-        if (!S.loggedIn && (!cookie || cookie.length < 5)) {
+        const loggedIn = await window.checkLoginGlobal();
+        if (!loggedIn) {
             toast('Cần đăng nhập trước! Vào Cài Đặt → đăng nhập QR.', 'error');
             return;
         }
+        const cookie = window.S.cookie || 'QR_SESSION';
 
         _scanning = true;
         _openLinks = [];
@@ -2973,7 +3112,7 @@ function initCopyGroup() {
                 const batch = groupIds.slice(b, b + BATCH);
                 const batchLinks = validLinks.slice(b, b + BATCH);
 
-                $('scanStatusText').textContent = 'Đang scan ' + (b+1) + '–' + Math.min(b+BATCH, groupIds.length) + ' / ' + groupIds.length + '...';
+                $('scanStatusText').textContent = 'Đang scan ' + (b + 1) + '–' + Math.min(b + BATCH, groupIds.length) + ' / ' + groupIds.length + '...';
 
                 try {
                     const result = await el.zalo.checkGroupChatStatus(cookie, batch);
@@ -2988,7 +3127,7 @@ function initCopyGroup() {
                             closedLinks.push({ link: originalLink, name: r.groupName || r.name || r.groupId || originalLink });
                         }
                     });
-                } catch(batchErr) {
+                } catch (batchErr) {
                     console.error("Scan batch error:", batchErr);
                     batchLinks.forEach(link => closedLinks.push({ link, name: link }));
                 }
@@ -2997,7 +3136,7 @@ function initCopyGroup() {
                 updateScanUI(_openLinks.length, closedLinks.length, pct);
                 if (b + BATCH < groupIds.length) await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000));
             }
-        } catch(e) {
+        } catch (e) {
             $('scanStatusText').textContent = '❌ Lỗi: ' + e.message;
         }
 
@@ -3053,7 +3192,7 @@ function initCopyGroup() {
             const newLinks = _openLinks.map(g => g.link).join('\n');
             pipeLinks.value = existing ? existing + '\n' + newLinks : newLinks;
             // Update badge
-            const lines = v => v.split('\n').map(l=>l.trim()).filter(l=>l.length>5);
+            const lines = v => v.split('\n').map(l => l.trim()).filter(l => l.length > 5);
             const badge = document.getElementById('pipeLinkCount');
             if (badge) badge.textContent = lines(pipeLinks.value).length + ' links';
             toast(`Đã thêm ${_openLinks.length} nhóm mở vào Pipeline!`, 'success');
@@ -3086,6 +3225,7 @@ function initCopyGroup() {
         div.style.color = colors[type] || colors.info;
         div.textContent = '[' + new Date().toLocaleTimeString('vi') + '] ' + msg;
         el.appendChild(div);
+        if (el.childElementCount > 300) el.removeChild(el.firstChild);
         el.scrollTop = el.scrollHeight;
     }
 
@@ -3104,11 +3244,12 @@ function initCopyGroup() {
         if (links.length === 0) { alert('Nhập ít nhất 1 link nhóm để Scan!'); return; }
 
         // Get cookie + account pool
-        const primaryCookie = S.cookie || (await ipc?.invoke('store:get', 'cookie'));
-        if (!primaryCookie && !S.loggedIn) {
+        const loggedIn = await window.checkLoginGlobal();
+        if (!loggedIn) {
             alert('Cần đăng nhập tài khoản chính trước!');
             return;
         }
+        const primaryCookie = window.S.cookie || 'QR_SESSION';
         const pool = (await ipc?.invoke('store:get', 'settingsPool')) || [];
         const allCookies = [primaryCookie, ...pool.map(t => t.cookie)].filter(Boolean);
         const allAccounts = [
@@ -3156,7 +3297,7 @@ function initCopyGroup() {
                 });
                 if (openGroupLinks.length === 0) openGroupLinks = links; // fallback nếu không có nhóm mở
                 autoLog(`✅ Tìm thấy ${openGroupLinks.length}/${links.length} nhóm mở chat`, 'ok');
-            } catch(e) {
+            } catch (e) {
                 openGroupLinks = links;
                 autoLog('⚠️ Scan lỗi, dùng tất cả link: ' + e.message, 'warn');
             }
@@ -3172,7 +3313,7 @@ function initCopyGroup() {
             for (let ai = 0; ai < allAccounts.length; ai++) {
                 if (_stopRequested) throw new Error('STOP');
                 const acct = allAccounts[ai];
-                autoLog(`  TK [${ai+1}/${allAccounts.length}] ${acct.name} đang join...`);
+                autoLog(`  TK [${ai + 1}/${allAccounts.length}] ${acct.name} đang join...`);
                 try {
                     const joinResult = await ipc?.invoke('zalo:autoJoinGroups', [acct.cookie], openGroupLinks);
                     const ok = joinResult?.joined?.length || 0;
@@ -3184,7 +3325,7 @@ function initCopyGroup() {
                         const gid = g.groupId || g.id || g.group_id;
                         if (gid) joinedGroupIds.add(String(gid));
                     });
-                } catch(e) {
+                } catch (e) {
                     autoLog(`    ❌ ${acct.name}: ${e.message}`, 'err');
                 }
                 await sleep(2000 + Math.random() * 2000);
@@ -3216,7 +3357,7 @@ function initCopyGroup() {
                         });
                         autoLog(`  Nhóm ${groupId}: +${members.length} thành viên (tổng: ${allMembers.size})`, 'ok');
                     }
-                } catch(e) {
+                } catch (e) {
                     autoLog(`  ⚠️ Nhóm ${groupId}: ${e.message}`, 'warn');
                 }
                 await sleep(1500);
@@ -3263,7 +3404,7 @@ function initCopyGroup() {
                         enableSmartSend: true,
                     });
                     autoLog(`    ✅ ${acct.name}: hoàn thành ${myChunk.length} người`, 'ok');
-                } catch(e) {
+                } catch (e) {
                     autoLog(`    ❌ ${acct.name}: ${e.message}`, 'err');
                 }
                 // Brief pause between accounts
@@ -3273,7 +3414,7 @@ function initCopyGroup() {
             autoLog(`✅ Đã gửi đến ${memberList.length} thành viên từ ${openGroupLinks.length} nhóm mở chat`, 'ok');
             toast(`Full Auto hoàn thành! ${memberList.length} thành viên đã được tiếp cận.`, 'success');
 
-        } catch(e) {
+        } catch (e) {
             if (e.message !== 'STOP' && e.message !== 'NO_OPEN_GROUPS' && e.message !== 'NO_MEMBERS') {
                 autoLog('❌ Lỗi: ' + e.message, 'err');
             }
@@ -3299,17 +3440,17 @@ function initCopyGroup() {
     // 2. Listen loginSuccess event từ main process sau QR scan
     try {
         if (window.electron && window.electron.onLoginSuccess) {
-            window.electron.onLoginSuccess(function(data) {
+            window.electron.onLoginSuccess(function (data) {
                 setTimeout(() => {
                     if (window.syncPipelineFromSettings) window.syncPipelineFromSettings();
                 }, 600);
             });
         }
-    } catch(e) {}
+    } catch (e) { }
 
     // 3. Poll cookie store mỗi 8s — nếu thay đổi thì sync
     var _lastCookie = null;
-    setInterval(async function() {
+    setInterval(async function () {
         try {
             var ipc = window.electronAPI || (window.electron && window.electron.ipcRenderer);
             if (!ipc) return;
@@ -3318,7 +3459,7 @@ function initCopyGroup() {
                 _lastCookie = cookie;
                 if (window.syncPipelineFromSettings) window.syncPipelineFromSettings();
             }
-        } catch(_) {}
+        } catch (_) { }
     }, 8000);
 })();
 
@@ -3328,7 +3469,7 @@ function initCopyGroup() {
 (function initPipelineSyncV2() {
     const ipc = window.electronAPI || (window.electron && window.electron.ipcRenderer);
     const get = async (k) => {
-        try { return ipc ? await ipc.invoke('store:get', k) : null; } catch(_) { return null; }
+        try { return ipc ? await ipc.invoke('store:get', k) : null; } catch (_) { return null; }
     };
 
     async function syncFromSettings() {
@@ -3362,11 +3503,11 @@ function initCopyGroup() {
                 display.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa đăng nhập — vào <b>Cài Đặt</b> để đăng nhập QR</div>';
             } else {
                 display.innerHTML = allAccounts.map((tk, i) => `
-                    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid ${tk.isPrimary?'rgba(102,126,234,0.3)':'var(--card-border)'}">
-                        <div style="width:28px;height:28px;border-radius:50%;background:${tk.isPrimary?'linear-gradient(135deg,#10b981,#059669)':'linear-gradient(135deg,#667eea,#764ba2)'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px">${(tk.name||'Z')[0].toUpperCase()}</div>
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid ${tk.isPrimary ? 'rgba(102,126,234,0.3)' : 'var(--card-border)'}">
+                        <div style="width:28px;height:28px;border-radius:50%;background:${tk.isPrimary ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#667eea,#764ba2)'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px">${(tk.name || 'Z')[0].toUpperCase()}</div>
                         <div style="flex:1">
-                            <span style="font-size:12px;font-weight:600">${tk.name||'TK '+(i+1)}</span>
-                            ${tk.isPrimary?'<span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:1px 5px;border-radius:4px;margin-left:4px">Chính</span>':''}
+                            <span style="font-size:12px;font-weight:600">${tk.name || 'TK ' + (i + 1)}</span>
+                            ${tk.isPrimary ? '<span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:1px 5px;border-radius:4px;margin-left:4px">Chính</span>' : ''}
                         </div>
                         <span style="font-size:10px;color:#10b981">✓ Sẵn sàng</span>
                     </div>
@@ -3388,7 +3529,7 @@ function initCopyGroup() {
             if (msgs.length === 0) {
                 msgList.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa có tin nhắn — thêm tại <b>Cài Đặt → Kho Tin Nhắn</b></div>';
             } else {
-                msgList.innerHTML = msgs.map((msg,i) => `<div style="display:flex;gap:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border)"><span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;flex-shrink:0">#${i+1}</span><span style="font-size:12px;line-height:1.5;color:var(--text-h)">${msg}</span></div>`).join('');
+                msgList.innerHTML = msgs.map((msg, i) => `<div style="display:flex;gap:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border)"><span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;flex-shrink:0">#${i + 1}</span><span style="font-size:12px;line-height:1.5;color:var(--text-h)">${msg}</span></div>`).join('');
             }
         }
 
@@ -3417,7 +3558,7 @@ function initCopyGroup() {
     setTimeout(syncFromSettings, 2000); // Retry sau 2s
 
     // Chạy khi navigate sang pipeline
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
         const nav = e.target.closest('[data-page]');
         if (nav && nav.dataset.page === 'pipeline') {
             setTimeout(syncFromSettings, 200);
@@ -3428,7 +3569,7 @@ function initCopyGroup() {
 // ══════════════════════════════════════════════════════════════════
 // GỬI TIN NHẮN VÀO NHÓM (group chat thread)
 // ══════════════════════════════════════════════════════════════════
-window.sendMsgToGroupChat = async function(groupId) {
+window.sendMsgToGroupChat = async function (groupId) {
     if (!S.loggedIn) { toast('Vui lòng đăng nhập trước!', 'error'); navigate('settings'); return; }
     const group = S.groups.find(g => g.id === groupId);
     const groupName = group ? group.name : groupId;
@@ -3449,14 +3590,14 @@ window.sendMsgToGroupChat = async function(groupId) {
             log('error', '❌ Lỗi: ' + r.error, 'send');
             toast('❌ Gửi thất bại: ' + r.error, 'error');
         }
-    } catch(e) {
+    } catch (e) {
         log('error', '❌ Lỗi: ' + e.message, 'send');
         toast('Lỗi: ' + e.message, 'error');
     }
 };
 
 // Gửi tin vào tất cả nhóm đã chọn
-window.sendMsgToAllSelectedGroups = async function() {
+window.sendMsgToAllSelectedGroups = async function () {
     if (!S.loggedIn) { toast('Vui lòng đăng nhập trước!', 'error'); navigate('settings'); return; }
     const groupIds = [...S.selectedGroups];
     if (groupIds.length === 0) { toast('Chưa chọn nhóm nào! Click vào nhóm để chọn.', 'warning'); return; }
@@ -3475,11 +3616,11 @@ window.sendMsgToAllSelectedGroups = async function() {
         const name = group ? group.name : gid;
         try {
             const r = await el.zalo.sendGroupMessage(cookie, gid, msg.trim());
-            if (r.success) { ok++; log('success', '✅ [' + (i+1) + '/' + groupIds.length + '] ' + name, 'send'); }
-            else { fail++; log('error', '❌ [' + (i+1) + '/' + groupIds.length + '] ' + name + ': ' + r.error, 'send'); }
-        } catch(e) {
+            if (r.success) { ok++; log('success', '✅ [' + (i + 1) + '/' + groupIds.length + '] ' + name, 'send'); }
+            else { fail++; log('error', '❌ [' + (i + 1) + '/' + groupIds.length + '] ' + name + ': ' + r.error, 'send'); }
+        } catch (e) {
             fail++;
-            log('error', '❌ [' + (i+1) + '/' + groupIds.length + '] ' + name + ': ' + e.message, 'send');
+            log('error', '❌ [' + (i + 1) + '/' + groupIds.length + '] ' + name + ': ' + e.message, 'send');
         }
         if (i < groupIds.length - 1) await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
     }
@@ -3494,11 +3635,11 @@ window.sendMsgToAllSelectedGroups = async function() {
 (function initPipelineSyncV2() {
     const ipc = window.electronAPI || (window.electron && window.electron.ipcRenderer);
     const get = async (k) => {
-        try { return ipc ? await ipc.invoke('store:get', k) : null; } catch(_) { return null; }
+        try { return ipc ? await ipc.invoke('store:get', k) : null; } catch (_) { return null; }
     };
     const store = {
         get: k => get(k),
-        set: (k, v) => { try { return ipc ? ipc.invoke('store:set', k, v) : null; } catch(_) { return null; } }
+        set: (k, v) => { try { return ipc ? ipc.invoke('store:set', k, v) : null; } catch (_) { return null; } }
     };
 
     async function syncFromSettings() {
@@ -3531,7 +3672,7 @@ window.sendMsgToAllSelectedGroups = async function() {
             if (allAccounts.length === 0) {
                 display.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa đăng nhập — vào <b>Cài Đặt</b> để đăng nhập QR</div>';
             } else {
-                display.innerHTML = allAccounts.map(function(tk, i) {
+                display.innerHTML = allAccounts.map(function (tk, i) {
                     var bgColor = tk.isPrimary ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#667eea,#764ba2)';
                     var borderColor = tk.isPrimary ? 'rgba(102,126,234,0.3)' : 'var(--card-border)';
                     var initial = (tk.name || 'Z')[0].toUpperCase();
@@ -3560,10 +3701,10 @@ window.sendMsgToAllSelectedGroups = async function() {
             if (msgs.length === 0) {
                 msgList.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px">Chưa có tin nhắn — thêm tại <b>Cài Đặt → Kho Tin Nhắn</b></div>';
             } else {
-                msgList.innerHTML = msgs.map(function(msg, i) {
+                msgList.innerHTML = msgs.map(function (msg, i) {
                     var preview = msg.length > 80 ? msg.slice(0, 80) + '…' : msg;
                     return '<div style="display:flex;gap:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border)">'
-                        + '<span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;flex-shrink:0">#' + (i+1) + '</span>'
+                        + '<span style="background:rgba(102,126,234,0.15);color:#667eea;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;flex-shrink:0">#' + (i + 1) + '</span>'
                         + '<span style="font-size:12px;line-height:1.5;color:var(--text-h)">' + preview + '</span>'
                         + '</div>';
                 }).join('');
@@ -3595,7 +3736,7 @@ window.sendMsgToAllSelectedGroups = async function() {
     setTimeout(syncFromSettings, 2000); // Retry sau 2s
 
     // Chạy khi navigate sang pipeline
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
         const nav = e.target.closest('[data-page]');
         if (nav && nav.dataset.page === 'pipeline') {
             setTimeout(syncFromSettings, 200);
@@ -3603,7 +3744,7 @@ window.sendMsgToAllSelectedGroups = async function() {
     });
 
     // Chạy khi login thành công
-    window.addEventListener('zalo:loginSuccess_internal', function() {
+    window.addEventListener('zalo:loginSuccess_internal', function () {
         setTimeout(syncFromSettings, 500);
     });
 })();

@@ -23,17 +23,17 @@
     function getSessionSize() {
         const h = new Date().getHours();
         // Buổi tối 18h-23h: session lớn hơn → gửi nhiều hơn (50-80 tin)
-        if (h >= 18 && h < 23) return 50 + Math.floor(Math.random() * 31); 
+        if (h >= 18 && h < 23) return 50 + Math.floor(Math.random() * 31);
         // Ban ngày: bình thường (25-35 tin)
-        return 25 + Math.floor(Math.random() * 11); 
+        return 25 + Math.floor(Math.random() * 11);
     }
 
     function getBreakDuration() {
         const h = new Date().getHours();
         // Buổi tối: nghỉ ngắn hơn → gửi nhanh hơn (20-40s)
-        if (h >= 18 && h < 23) return (20 + Math.random() * 20) * 1000; 
+        if (h >= 18 && h < 23) return (20 + Math.random() * 20) * 1000;
         // Ban ngày: nghỉ bình thường (60-180s)
-        return (60 + Math.random() * 120) * 1000; 
+        return (60 + Math.random() * 120) * 1000;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -129,17 +129,20 @@
     }
 
     function spinMessage(baseMsg, targetName) {
-        // 1. Thay <Name> bằng tên thật của người nhận
-        let result = baseMsg.replace(/<Name>/gi, targetName || 'bạn');
+        // 1. Thay <Name> bằng tên thật của người nhận (Lấy Tên Ngắn)
+        let shortName = targetName ? targetName.trim() : 'bạn';
+        if (shortName.includes(' ')) shortName = shortName.split(' ').pop();
+        let result = baseMsg.replace(/<Name>/gi, shortName);
 
         // 2. Spin syntax {A|B|C} → chọn ngẫu nhiên 1 phần tử
-        result = result.replace(/\{([^}]+)\}/g, function(_, opts) {
+        result = result.replace(/\{([^}]+)\}/g, function (_, opts) {
             var arr = opts.split('|');
             return arr[Math.floor(Math.random() * arr.length)];
         });
 
         // 3. Thêm lời chào — nội dung gốc giữ nguyên
-        result = getGreeting() + ',\n' + result;
+        // Đã gỡ bỏ: Không tự động chèn cứng "Chào bạn" nữa để User tự do dùng thẻ Spin {Chào|Hi} <Name>
+        // result = getGreeting() + ',\n' + result;
 
         // 4. Chèn zero-width char để mỗi tin unique ở mức byte
         const zwPos = Math.floor(Math.random() * Math.max(1, result.length - 1)) + 1;
@@ -149,17 +152,11 @@
         return result;
     }
 
-    // ── Lấy login state từ store ──
-    async function checkLogin() {
-        try {
-            const all = await el.store.getAll();
-            _loggedIn = !!(all && all.loggedIn);
-            _cookie = (all && all.cookie) || null;
-            return _loggedIn;
-        } catch (e) {
-            return false;
-        }
-    }
+    // ══════════════════════════════════════════════════════════════
+    // LOGIN STATE: Đọc từ store + fallback từ window.S (renderer.js)
+    // QR login không có cookie thật → dùng 'QR_SESSION' để backend dùng cache
+    // ══════════════════════════════════════════════════════════════
+    // Removed local checkLogin, using window.checkLoginGlobal
 
     // ── Helper: Log ──
     function dmLog(msg, type) {
@@ -171,6 +168,7 @@
         div.style.color = colors[type] || colors.info;
         div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
         logEl.appendChild(div);
+        if (logEl.childElementCount > 300) logEl.removeChild(logEl.firstChild);
         logEl.scrollTop = logEl.scrollHeight;
     }
 
@@ -187,14 +185,14 @@
         const sel = $('dmGroupSelect');
         if (!sel) return;
 
-        const loggedIn = await checkLogin();
+        const loggedIn = await window.checkLoginGlobal();
         if (!loggedIn) {
             sel.innerHTML = '<option value="">-- Chưa đăng nhập --</option>';
             return;
         }
 
         try {
-            const cookie = _cookie || 'QR_SESSION';
+            const cookie = (window.S && window.S.cookie) || _cookie || 'QR_SESSION';
             const result = await ez.getGroups(cookie);
             if (result && result.success && result.groups) {
                 const groups = result.groups;
@@ -220,7 +218,7 @@
     const btnLoad = $('btnDMLoadGroups');
     if (btnLoad) {
         btnLoad.addEventListener('click', async function () {
-            const loggedIn = await checkLogin();
+            const loggedIn = await window.checkLoginGlobal();
             if (!loggedIn) {
                 if (typeof toast === 'function') toast('Cần đăng nhập trước!', 'error');
                 return;
@@ -246,7 +244,7 @@
     const btnHarvest = $('btnDMHarvest');
     if (btnHarvest) {
         btnHarvest.addEventListener('click', async function () {
-            const loggedIn = await checkLogin();
+            const loggedIn = await window.checkLoginGlobal();
             if (!loggedIn) {
                 if (typeof toast === 'function') toast('Cần đăng nhập!', 'error');
                 return;
@@ -262,28 +260,54 @@
             dmProgress(20);
 
             try {
-                const cookie = _cookie || 'QR_SESSION';
-                const result = await ez.getGroupMembers(cookie, groupId);
-                const members = (result && result.members) || result || [];
-
-                if (!Array.isArray(members) || members.length === 0) {
-                    dmLog('Không lấy được thành viên', 'warn');
-                    btnHarvest.disabled = false;
-                    dmProgress(0);
-                    return;
-                }
-
-                _targets = members;
-                dmLog('Harvest xong: ' + _targets.length + ' thành viên', 'ok');
-                dmProgress(100);
-
-                // Lưu adminIds để lọc sau
+                _targets = [];
                 _adminUids = new Set();
-                if (result.adminIds && Array.isArray(result.adminIds)) {
-                    result.adminIds.forEach(function(id) { _adminUids.add(String(id)); });
+                
+                // ── ĐỒNG BỘ: Thu hoạch Multi-Group từ Memory Bus ──
+                if (window._swarmDMHarvestPayload && window._swarmDMHarvestPayload.length > 0) {
+                    dmLog(`📦 Bắt đầu thu hoạch từ ${window._swarmDMHarvestPayload.length} Nhóm đồng bộ...`, 'head');
+                    
+                    for (let i = 0; i < window._swarmDMHarvestPayload.length; i++) {
+                        const g = window._swarmDMHarvestPayload[i];
+                        dmLog(`⏳ Đang cào Nhóm: ${g.name} (Tài khoản: ${g._belongToName})`, 'info');
+                        const res = await ez.getGroupMembers(g._belongToCookie, g.id);
+                        if (res && res.members && res.members.length > 0) {
+                            _targets.push(...res.members);
+                            if (res.adminIds) res.adminIds.forEach(id => _adminUids.add(String(id)));
+                            if (res.creatorId) _adminUids.add(String(res.creatorId));
+                        }
+                    }
+                    
+                    window._swarmDMHarvestPayload = null; // Tiêu thụ xong thì xoá
+                    dmLog(`Harvest xong Tổng Cục: ${_targets.length} thành viên!`, 'ok');
+                    if (_adminUids.size > 0) dmLog(`Phát hiện ${_adminUids.size} admin/creator`, 'info');
+                    dmProgress(100);
+                    
+                } else {
+                    // ── LOGIC CŨ MỘT NHÓM BẰNG TEXTBOX ──
+                    const cookie = _cookie || (window.S && window.S.cookie) || 'QR_SESSION';
+                    dmLog('Cookie: ' + (cookie === 'QR_SESSION' ? 'QR Session (cached)' : cookie.substring(0, 15) + '...'), 'info');
+                    const result = await ez.getGroupMembers(cookie, groupId);
+                    const members = (result && result.members) || result || [];
+
+                    if (!Array.isArray(members) || members.length === 0) {
+                        dmLog('Không lấy được thành viên', 'warn');
+                        btnHarvest.disabled = false;
+                        dmProgress(0);
+                        return;
+                    }
+
+                    _targets = members;
+                    dmLog('Harvest xong: ' + _targets.length + ' thành viên', 'ok');
+                    dmProgress(100);
+
+                    // Lưu adminIds để lọc sau
+                    if (result.adminIds && Array.isArray(result.adminIds)) {
+                        result.adminIds.forEach(function (id) { _adminUids.add(String(id)); });
+                    }
+                    if (result.creatorId) _adminUids.add(String(result.creatorId));
+                    if (_adminUids.size > 0) dmLog('Phát hiện ' + _adminUids.size + ' admin/creator', 'info');
                 }
-                if (result.creatorId) _adminUids.add(String(result.creatorId));
-                if (_adminUids.size > 0) dmLog('Phát hiện ' + _adminUids.size + ' admin/creator', 'info');
 
                 const countEl = $('dmTargetCount');
                 if (countEl) countEl.textContent = _targets.length;
@@ -330,7 +354,7 @@
                 return;
             }
 
-            const loggedIn = await checkLogin();
+            const loggedIn = await window.checkLoginGlobal();
             if (!loggedIn) {
                 if (typeof toast === 'function') toast('Cần đăng nhập!', 'error');
                 return;
@@ -342,9 +366,50 @@
             const btnStopEl = $('btnDMStop');
             if (btnStopEl) btnStopEl.style.display = '';
 
-            const cookie = _cookie || 'QR_SESSION';
+            // MULTI-ACCOUNT POOL CONFIG
+            const chkRotate = $('dmRotateAccount');
+            const doRotate = chkRotate && chkRotate.checked;
+            const rotateCount = parseInt($('dmRotateCount')?.value) || 10;
+            let rawAccounts = [];
+            try {
+                const pool = await ez.poolGetAll();
+                if (pool && pool.length) rawAccounts = pool;
+            } catch (e) { }
+            // Fallback
+            if (rawAccounts.length === 0 || !doRotate) {
+                const globalCookie = (window.S && window.S.cookie) || 'QR_SESSION';
+                const c = _cookie || globalCookie;
+                rawAccounts = [{ cookie: c, name: (window.S && window.S.account && window.S.account.name) || 'Chính' }];
+            }
+
+            // Deduplicate logic + Bỏ qua các Nick đã chết
+            let accounts = [];
+            let seenCookies = new Set();
+            for (const acc of rawAccounts) {
+                if (acc.status === 'dead') continue; // Lọc bỏ hàng lỗi từ Vệ Sĩ Watchdog
+                if (!seenCookies.has(acc.cookie) && acc.cookie) {
+                    seenCookies.add(acc.cookie);
+                    accounts.push(acc);
+                }
+            }
+            if (accounts.length === 0) {
+                if (rawAccounts.length > 0) accounts.push(rawAccounts[0]); // safety override
+                else {
+                    dmLog('⛔ Không có Nick nào khả dụng để chạy!', 'err');
+                    _running = false; btnSend.disabled = false;
+                    return;
+                }
+            }
+
+            let activeAccIdx = 0;
+            let activeCookie = accounts[activeAccIdx].cookie;
+
             const total = _targets.length;
             let sent = 0, failed = 0;
+
+            if (doRotate && accounts.length > 1) {
+                dmLog('🔄 Bật chế độ XOAY TÀI KHOẢN: ' + accounts.length + ' nick (đổi mỗi ' + rotateCount + ' tin)', 'head');
+            }
 
             // Session Lifecycle: random session size
             let sessionSize = getSessionSize();
@@ -408,10 +473,55 @@
                     await readBeforeSend(uid, name, dmLog);
                 }
 
+                // ── ROTATE ACCOUNT LOGIC ──
+                if (doRotate && accounts.length > 1) {
+                    const attempts = sent + failed;
+                    // Chuyển tài khoản mỗi khi số tin (đã gửi + lỗi) chia hết cho cấu hình
+                    if (attempts > 0 && attempts % rotateCount === 0) {
+                        const newIdx = Math.floor(attempts / rotateCount) % accounts.length;
+                        if (newIdx !== activeAccIdx) {
+                            activeAccIdx = newIdx;
+                            activeCookie = accounts[activeAccIdx].cookie;
+                            dmLog('🔄 Lên ca: Nick ' + (accounts[activeAccIdx].name || accounts[activeAccIdx].phone || ('#' + (activeAccIdx + 1))) + ' (tin số ' + (attempts + 1) + ')', 'head');
+                            // Delay 1 xíu giữa việc chuyển nick để an toàn
+                            await new Promise(r => setTimeout(r, 1500));
+                        }
+                    }
+                }
+
                 try {
                     // ── MESSAGE SPIN: <Name> + {A|B|C} + greeting + zero-width ──
                     const spunMsg = spinMessage(msg, name);
-                    const r = await ez.sendMessageByUid(cookie, uid, spunMsg);
+                    const r = await ez.sendMessageByUid(activeCookie, uid, spunMsg);
+
+                    // ANTI SILENT-TOKEN DEATH check (V8 Graceful Eviction)
+                    if (r && r.error && typeof r.error === 'string') {
+                        const lw = r.error.toLowerCase();
+                        if (lw.includes('auth') || lw.includes('expire') || lw.includes('đăng nhập') || lw.includes('session')) {
+                            dmLog(`⛔ NICK VĂNG: Nick ${accounts[activeAccIdx].name || '#' + activeAccIdx} đã tạch Session. Đá khỏi vòng lặp!`, 'err');
+
+                            // Đánh dấu chết để Vệ Sĩ loại bỏ khỏi danh sách vĩnh viễn
+                            accounts[activeAccIdx].status = 'dead';
+                            accounts.splice(activeAccIdx, 1);
+
+                            if (accounts.length === 0) {
+                                dmLog('⛔ KHẨN CẤP: Toàn bộ Nick trong Pool đều đã chết. Chấm dứt chiến dịch!', 'err');
+                                if (typeof toast === 'function') toast('Tất cả Nick đã đăng xuất!', 'error');
+                                failed++;
+                                _stopRequested = true;
+                                break;
+                            } else {
+                                // Xoay luôn sang nick mới và retry luôn lệnh này
+                                activeAccIdx = activeAccIdx % accounts.length;
+                                activeCookie = accounts[activeAccIdx].cookie;
+                                dmLog(`🔄 Lập tức chuyển Gánh cho Nick: ${accounts[activeAccIdx].name}`, 'head');
+                                i--; // Lùi lại 1 step để Nick mới gởi lại tin nhắn bị hụt
+                                failed++; // Vẫn tính là 1 lần failed
+                                continue;
+                            }
+                        }
+                    }
+
                     if (r && r.success) {
                         sent++;
                         sessionSent++;
@@ -421,11 +531,11 @@
                         // ── COMBO: KẾT BẠN sau khi gửi DM ──
                         var chkFriend = $('dmAddFriend');
                         if (chkFriend && chkFriend.checked) {
-                            await new Promise(function(r) { setTimeout(r, 2000 + Math.random() * 2000); });
+                            await new Promise(function (r) { setTimeout(r, 2000 + Math.random() * 2000); });
                             try {
-                                await ez.sendFriendRequestByUid(cookie, uid, '');
+                                await ez.sendFriendRequestByUid(activeCookie, uid, '');
                                 dmLog('   🤝 Đã gửi lời mời kết bạn ' + name, 'ok');
-                            } catch(fe) {
+                            } catch (fe) {
                                 dmLog('   ⚠ Kết bạn lỗi: ' + fe.message, 'warn');
                             }
                         }
@@ -456,7 +566,7 @@
                     } else {
                         delayMs = getHumanDelay();
                     }
-                    await new Promise(function(r) { setTimeout(r, delayMs); });
+                    await new Promise(function (r) { setTimeout(r, delayMs); });
                 }
             }
 

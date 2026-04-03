@@ -10,16 +10,20 @@ let tray = null;
 let isQuiting = false;
 
 // â”€â”€â”€ Store (simple JSON) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const dataPath = path.join(app.getPath('userData'), 'data.json');
+let _dataPath = null;
+function getDataPath() {
+    if (!_dataPath) _dataPath = path.join(app.getPath('userData'), 'data.json');
+    return _dataPath;
+}
 function readData() {
-    try { if (fs.existsSync(dataPath)) return JSON.parse(fs.readFileSync(dataPath, 'utf8')); } catch { }
+    try { const dp = getDataPath(); if (fs.existsSync(dp)) return JSON.parse(fs.readFileSync(dp, 'utf8')); } catch { }
     return {};
 }
 // Bug4 fix: write queue trÃ¡nh race condition khi nhiá»u IPC ghi cÃ¹ng lÃºc
 let _writeQueue = Promise.resolve();
 function writeData(obj) {
-    _writeQueue = _writeQueue.then(() => {
-        try { fs.writeFileSync(dataPath, JSON.stringify(obj, null, 2)); } catch { }
+    _writeQueue = _writeQueue.then(async () => {
+        try { await fs.promises.writeFile(getDataPath(), JSON.stringify(obj, null, 2)); } catch { }
     });
     return _writeQueue;
 }
@@ -370,7 +374,15 @@ ipcMain.handle('zalo:getGroupMembers', async (_e, cookie, groupId) => {
     catch (err) { return { success: false, error: err.message }; }
 });
 
-ipcMain.handle('zalo:sendMessageByUid', async (_e, cookie, uid, message) => {
+
+    
+    ipcMain.handle('zalo:leaveGroup', async (event, { cookie, groupId }) => {
+        return await zaloApi.leaveGroup(cookie, groupId);
+    });
+    ipcMain.handle('zalo:massSendGroupMsgs', async (event, params) => {
+        return await zaloApi.massSendGroupMsgs(params);
+    });
+    ipcMain.handle('zalo:sendMessageByUid', async (_e, cookie, uid, message) => {
     try {
         const r = await zaloApi.sendMessageByUid(cookie, uid, message);
         console.log(`[SEND_UID] uid=${uid} success=${r.success}`);
@@ -434,6 +446,22 @@ ipcMain.handle('zalo:autoJoinGroups', async (_e, cookies, groupLinks) => {
         });
     } catch (e) {
         return { error: e.message, joined: [], failed: groupLinks.map(l => ({ link: l, reason: e.message })), alreadyIn: [] };
+    }
+});
+
+// ── Scan Group Links ──
+ipcMain.handle('zalo:scanGroupLinks', async (_e, cookies, groupLinks) => {
+    try {
+        return await zaloApi.scanGroupLinks({
+            cookies,
+            groupLinks,
+            onProgress: (p) => {
+                if (mainWindow && !mainWindow.isDestroyed())
+                    mainWindow.webContents.send('autoJoin-progress', p);
+            }
+        });
+    } catch (e) {
+        return { error: e.message, scanned: [], failed: groupLinks.map(l => ({ link: l, reason: e.message })) };
     }
 });
 
